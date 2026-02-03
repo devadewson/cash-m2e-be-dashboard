@@ -1,0 +1,1 @@
+INSERT INTO TBL_BASE_SP VALUES('customize_field', 'customize_field', 'userId, subProduct, screen, attribute', 'N', 'PROCEDURE');

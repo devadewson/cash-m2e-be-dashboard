@@ -1,0 +1,106 @@
+create or replace PROCEDURE OV_HP_ACCOUNT_STATS
+(
+  corpId IN VARCHAR2,
+  userId IN VARCHAR2,
+  corpCifNo IN VARCHAR2,
+   baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+BEGIN
+OPEN CURSOR FOR
+  	SELECT
+    mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    tadu.facility_CURRENCY AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.OUTSTANDING_balance) AS totalAmount
+    max(tadu.OUTSTANDING_balance) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+FROM
+    TBL_PORTFOLIO_HP tadu, MV_USER_ENTITLEMENT mv, TBL_MT_ACCT_TYP@cts_sso mat
+WHERE
+    mv.ACCT_NO = tadu.FACILITY_PARENT
+    AND mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND tadu.facility_CURRENCY = baseCurrency
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'HP' -- whats BHP and HP?
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+    mat.cd, mat.dscp, tadu.facility_CURRENCY
+
+--union BHP table
+UNION
+
+    SELECT
+    mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    tadu.CURRENCY AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.OUTSTANDING_balance) AS totalAmount
+    max(tadu.OUTSTANDING_balance) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+FROM
+    TBL_PORTFOLIO_FS tadu, MV_USER_ENTITLEMENT mv, TBL_MT_ACCT_TYP@cts_sso mat
+WHERE
+    mv.ACCT_NO = tadu.ACCOUNT_NO
+    AND mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND tadu.CURRENCY = baseCurrency
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'FS'
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+    mat.cd, mat.dscp, tadu.CURRENCY
+
+UNION
+
+    SELECT
+    mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    tadu.CURRENCY AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.OUTSTANDING_balance) AS totalAmount
+    max(tadu.OUTSTANDING_balance) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+FROM
+    TBL_PORTFOLIO_BD tadu, MV_USER_ENTITLEMENT mv, TBL_MT_ACCT_TYP@cts_sso mat
+WHERE
+    mv.ACCT_NO = tadu.ACCOUNT_NO
+    AND mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND tadu.CURRENCY = baseCurrency
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'BD'
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+    mat.cd, mat.dscp, tadu.CURRENCY
+
+UNION
+
+    SELECT
+    mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    tadu.CURRENCY AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.OUTSTANDING_balance) AS totalAmount
+    max(tadu.CURRENT_BALANCE) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+FROM
+    TBL_PORTFOLIO_PBR tadu, MV_USER_ENTITLEMENT mv, TBL_MT_ACCT_TYP@cts_sso mat
+WHERE
+    mv.ACCT_NO = tadu.ACCOUNT_NO
+    AND mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND tadu.CURRENCY = baseCurrency
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'PBR'
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+    mat.cd, mat.dscp, tadu.CURRENCY;
+
+END OV_HP_ACCOUNT_STATS;

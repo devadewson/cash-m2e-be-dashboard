@@ -1,0 +1,4 @@
+CREATE INDEX IDX_PORTFOLIO_IV_02 ON TBL_PORTFOLIO_IV(ACCOUNT_NO);
+CREATE INDEX IDX_PORTFOLIO_IV_02 ON TBL_PORTFOLIO_IV(DEPOSIT_NO);
+
+create index idx_mt_foreign_exchange_01 on tbl_mt_foreign_exchange(provider);

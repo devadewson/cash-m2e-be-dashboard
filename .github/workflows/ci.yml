@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - develop*
+      - release/*
+      
+  pull_request:
+    branches:
+      - main
+      - develop*
+      - sit
+      - release/*
+  
+jobs:
+   build:
+        uses: MSS-DEVOPS/workflow-library/.github/workflows/mvn-build.yml@main
+        with:
+            java_version: "17"
+            skip_tests: "true"
+            runner_label: mss-gb-runners
+        secrets: inherit
+
+   sonarqube:
+        uses: MSS-DEVOPS/workflow-library/.github/workflows/mvn-sonarqube.yml@main
+        with:
+            java_version: "17"
+            skip_tests: "true"
+            runner_label: mss-gb-runners
+        secrets: inherit
+
+   trivy-scan:
+        uses: MSS-DEVOPS/workflow-library/.github/workflows/trivy-scan.yml@main
+        with:
+           path:  .
+        secrets: inherit

@@ -1,0 +1,36 @@
+create or replace PROCEDURE OV_UT_ACCOUNT_STATS
+(
+  corpId IN VARCHAR2,
+  userId IN VARCHAR2,
+  corpCifNo IN VARCHAR2,
+  baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+    baseCcy VARCHAR2(3) := 'MYR';
+BEGIN
+    baseCcy := GET_BASE_CURRENCY(corpId);
+
+OPEN CURSOR FOR
+    SELECT
+        mat.cd AS subProduct,
+        mat.dscp as subProductDesc,
+        'Total Value' as label,
+        'MYR' AS currency,
+        COUNT (DISTINCT mv.ACCT_NO) AS totNoOfAccounts,
+  		--sum(tadu.TOTAL_VALUE) AS totalAmount
+       -- max(tadu.TOTAL_VALUE) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+       ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.TOTAL_VALUE)), 2) AS totalAmount
+		FROM
+        TBL_Portfolio_UT tadu
+        inner join MV_USER_ENTITLEMENT mv on tadu.CIF_NUMBER = mv.CIF_NO
+        join TBL_MT_ACCT_TYP@cts_sso mat on  mv.SUB_PRODUCT = mat.cd
+		WHERE
+		mv.CORP_ID = corpId
+        AND mv.corp_usr_id = userId
+        AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+        AND mv.PRODUCT = 'INVESTMENT'
+        AND mv.SUB_PRODUCT = 'UT'
+        AND TRUNC(tadu.DT_CREATED) = (SELECT MAX(TRUNC(DT_CREATED)) FROM TBL_Portfolio_UT)
+        GROUP BY mat.cd, mat.dscp;
+
+END OV_UT_ACCOUNT_STATS;

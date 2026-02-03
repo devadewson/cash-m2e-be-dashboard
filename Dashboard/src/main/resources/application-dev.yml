@@ -1,0 +1,5 @@
+spring:
+  config:
+    import:
+      - file:/app/cfo-dev/Dashboard/properties/application.yml
+      - file:/app/cfo-dev/Dashboard/properties/mq.properties

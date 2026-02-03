@@ -1,0 +1,385 @@
+create or replace PROCEDURE OVERVIEW_SUMMARY
+(   corpId IN VARCHAR2,
+    userId IN VARCHAR2,
+    corpCifNo IN VARCHAR2,
+    CURSOR OUT SYS_REFCURSOR
+)
+AS
+    baseCcy VARCHAR2(3) := 'MYR';
+BEGIN
+    baseCcy := GET_BASE_CURRENCY(corpId);
+
+OPEN CURSOR FOR
+WITH LatestDates AS (
+        SELECT
+            mv.acct_no,
+            MAX(TRUNC(pdp.dt_created)) AS latest_date  -- Use TRUNC to get only the date
+        FROM
+            MV_USER_ENTITLEMENT mv
+            LEFT JOIN TBL_PORTFOLIO_FD pdp ON mv.acct_no = pdp.account_no
+        WHERE
+            (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+            AND mv.corp_usr_id = userId
+            AND mv.product = 'DEPOSIT'
+            AND mv.sub_product = 'FD'
+        GROUP BY
+            mv.acct_no
+)
+
+SELECT
+    subProductDesc as subProductDesc,
+    COUNT(acct_no) AS noOfAccounts,
+    TO_CHAR(
+        ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency_code, ledger_balance)), 2),
+        'FM9999999990.00'
+    ) AS ledgerBalance,
+    TO_CHAR(
+        ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency_code, cust_available_bal)), 2),
+        'FM9999999990.00'
+    ) AS availableBalance,
+    TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS facilityLimit,
+    TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS outstandingBalance
+    FROM
+    (
+        SELECT
+            acct_no,
+            currency_code,
+            ledger_balance,
+            cust_available_bal,
+            subProduct,
+            subProductDesc,
+            ROW_NUMBER() OVER (PARTITION BY acct_no ORDER BY dt_created DESC) AS rn
+        FROM
+        (
+            SELECT
+                mv.acct_no,
+                pdp.currency_code,
+                pdp.ledger_balance,
+                pdp.cust_available_bal,
+                pdp.dt_created,
+                mat.cd as subProduct,
+                mat.dscp as subProductDesc
+            FROM
+                TBL_PORTFOLIO_DP pdp
+                INNER JOIN MV_USER_ENTITLEMENT mv ON mv.acct_no = pdp.account_no
+                INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+            WHERE
+                mv.CORP_ID = corpId
+                AND mv.corp_usr_id = userId
+              --  AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+                AND mv.product = 'DEPOSIT'
+                AND mv.sub_product IN ('CA', 'FCA', 'MFCA')
+        )
+    )
+    WHERE rn = 1 group by subProductDesc
+
+UNION
+
+    SELECT
+       subProductDesc as subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(
+           SUM(principal_amount),
+           'FM9999999990.00'
+       ) AS availableBalance,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS facilityLimit,
+    TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS outstandingBalance
+    FROM (
+        SELECT
+            mv.acct_no AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, pdp.currency_code, pdp.principal_amount)), 2)  AS principal_amount,
+            mat.cd AS subProduct,
+            mat.dscp AS subProductDesc
+        FROM
+            MV_USER_ENTITLEMENT mv
+            LEFT JOIN TBL_PORTFOLIO_FD pdp ON mv.acct_no = pdp.account_no
+            LEFT JOIN LatestDates ld ON mv.acct_no = ld.acct_no AND TRUNC(pdp.dt_created) = ld.latest_date  -- Compare dates only
+            INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+        WHERE
+            (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+            AND mv.product = 'DEPOSIT'
+            AND mv.sub_product = 'FD'
+        GROUP BY
+            mv.acct_no, mat.cd, mat.dscp
+    )
+    GROUP BY  subProductDesc
+
+    UNION
+
+    SELECT
+        subProductDesc as subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(
+           SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(
+           SUM(totalAmount),
+           'FM9999999990.00'
+       )AS availableBalance,
+       TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS facilityLimit,
+    TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+       SELECT
+            mat.cd AS subProduct,
+            mat.dscp AS subProductDesc,
+            mv.ACCT_NO AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.TOTAL_VALUE)), 2) AS totalAmount
+            FROM
+            TBL_Portfolio_UT tadu
+            inner join MV_USER_ENTITLEMENT mv on tadu.CIF_NUMBER = mv.CIF_NO
+            INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+            WHERE
+            mv.CORP_ID = corpId
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+            AND mv.PRODUCT = 'INVESTMENT'
+            AND mv.SUB_PRODUCT = 'UT'
+            AND TRUNC(tadu.DT_CREATED) = (SELECT MAX(TRUNC(DT_CREATED)) FROM TBL_Portfolio_UT)
+            GROUP BY mat.cd, mat.dscp, mv.ACCT_NO
+    )
+    GROUP BY subProductDesc
+
+    UNION
+
+    SELECT
+        subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(
+           SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(
+           SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS availableBalance,
+       TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS facilityLimit,
+    TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+            SELECT
+            case when mv.is_add_oth_bank_acct = 'Y' then to_nchar('Other') else mv.product
+            end as subProduct,
+            case when mv.is_add_oth_bank_acct = 'Y' then to_nchar('Other Bank Accounts') else mapt.dscp
+            end as subProductDesc,
+            mv.ACCT_NO AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.OPE_BAL_CURR, tadu.ope_bal_amount)), 2) AS totalAmount
+        FROM
+            MV_USER_ENTITLEMENT mv
+            inner join tbl_mt_acct_typ@cts_sso mat on mat.cd = mv.sub_product
+            inner join tbl_mt_acct_prod_typ@cts_sso mapt on mapt.cd = mv.product
+            left join tbl_portfolio_activity_swift tadu on  mv.ACCT_NO = tadu.ACCOUNT_ID
+        WHERE
+            mv.CORP_ID = corpId
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+            AND mv.is_add_oth_bank_acct = 'Y'
+        GROUP BY mv.is_add_oth_bank_acct, mv.ACCT_NO, mv.product, mapt.dscp
+    )
+    GROUP BY subProductDesc
+
+    UNION
+
+     SELECT
+        subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(0,'FM9999999990.00'
+       ) AS availableBalance,
+        TO_CHAR(SUM(totalFacility),
+           'FM9999999990.00'
+       ) AS facilityLimit,
+        TO_CHAR(SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+            SELECT mat.cd, mat.dscp AS subProductDesc,
+            mv.ACCT_NO AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.facility_limit)), 2) AS totalFacility,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.OUTSTANDING_BALANCE)), 2) AS totalAmount
+            FROM
+                MV_USER_ENTITLEMENT mv
+                inner join tbl_mt_acct_typ@cts_sso mat on mat.cd = mv.sub_product
+                left join TBL_PORTFOLIO_LN tadu on mv.ACCT_NO = tadu.ACCOUNT_NO
+        WHERE
+            mv.CORP_ID = corpId
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+           AND mv.PRODUCT = 'LOAN'
+           AND mv.SUB_PRODUCT = 'TL'
+        GROUP BY mat.cd, mat.dscp, mv.ACCT_NO
+     )
+    GROUP BY subProductDesc
+
+    UNION
+
+     SELECT
+        subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(0,'FM9999999990.00'
+       ) AS availableBalance,
+        TO_CHAR(SUM(totalFacility),
+           'FM9999999990.00'
+       ) AS facilityLimit,
+       TO_CHAR(SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+            SELECT
+            mat.cd AS subProduct,
+            mat.dscp AS subProductDesc,
+            mv.ACCT_NO AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.facility_limit)), 2) AS totalFacility,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.outstanding_balance)), 2) AS totalAmount
+            FROM
+            MV_USER_ENTITLEMENT mv
+            inner join tbl_mt_acct_typ@cts_sso mat on mat.cd = mv.sub_product
+            inner join tbl_mt_acct_prod_typ@cts_sso mapt on mapt.cd = mv.product
+            left join TBL_Portfolio_STRC tadu on mv.cif_no = tadu.CIF_NO
+        WHERE
+            mv.CORP_ID = corpId
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+            AND mv.PRODUCT = 'LOAN'
+            AND mv.SUB_PRODUCT = 'RC' --Revolving Credit
+            AND TRUNC(tadu.DT_CREATED) = (SELECT MAX(TRUNC(DT_CREATED)) FROM TBL_Portfolio_STRC)
+        GROUP BY
+            mat.cd, mat.dscp, mv.ACCT_NO
+             )
+            GROUP BY subProductDesc
+
+       UNION
+
+        SELECT
+        subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(0,'FM9999999990.00'
+       ) AS availableBalance,
+        TO_CHAR(SUM(totalFacility),
+           'FM9999999990.00'
+       ) AS facilityLimit,
+        TO_CHAR(SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+        SELECT
+            to_nchar('OD') AS subProduct,
+            to_nchar('Overdraft') as subProductDesc,
+            mv.ACCT_NO AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.FACILITY_LIMIT)), 2) AS totalFacility,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.unutilised_amount)), 2) AS totalAmount
+            FROM
+             MV_USER_ENTITLEMENT mv
+            inner join tbl_mt_acct_prod_typ@cts_sso mapt on mapt.cd = mv.product
+            left join TBL_Portfolio_dp tadu on mv.acct_no = tadu.ACCOUNT_NO
+        WHERE
+            mv.CORP_ID = corpId
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+            AND tadu.is_od = 'Y'
+            GROUP BY mv.ACCT_NO
+         )
+            GROUP BY subProductDesc
+
+       UNION
+
+        SELECT
+        subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(0,'FM9999999990.00'
+       ) AS availableBalance,
+        TO_CHAR(SUM(totalFacility),
+           'FM9999999990.00'
+       ) AS facilityLimit,
+        TO_CHAR(SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+            SELECT to_nchar('Trade') as subProductDesc,
+            mv.ACCT_NO AS acct_no,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.currency, tadu.outstanding)), 2) AS totalFacility,
+            ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.currency, tadu.outstanding)), 2) AS totalAmount
+            FROM
+            MV_USER_ENTITLEMENT mv
+            INNER JOIN tbl_portfolio_trd tadu ON mv.cif_no = tadu.cif_no
+            INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+            WHERE
+                mv.CORP_ID = corpId
+                AND mv.corp_usr_id = userId
+                AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+                AND mv.PRODUCT = 'TRADE'
+                AND mv.sub_PRODUCT = 'TRD'
+                and tadu.category in ('I','E','L','G')
+            GROUP BY mv.ACCT_NO
+        )
+            GROUP BY subProductDesc
+
+        UNION
+
+        SELECT
+        subProductDesc,
+        COUNT(acct_no) AS noOfAccounts,
+        TO_CHAR(0,
+           'FM9999999990.00'
+       ) AS ledgerBalance,
+        TO_CHAR(0,'FM9999999990.00'
+       ) AS availableBalance,
+        TO_CHAR(SUM(totalFacility),
+           'FM9999999990.00'
+       ) AS facilityLimit,
+        TO_CHAR(SUM(totalAmount),
+           'FM9999999990.00'
+       ) AS outstandingBalance
+        FROM (
+          SELECT
+                mat.dscp as subProductDesc,
+                mv.ACCT_NO AS acct_no,
+                ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.FACILITY_CURRENCY, tadu.FACILITY_LIMIT)), 2) AS totalFacility,
+                ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.FACILITY_CURRENCY, tadu.OUTSTANDING_balance)), 2) AS totalAmount
+            FROM
+                MV_USER_ENTITLEMENT mv
+                INNER JOIN TBL_PORTFOLIO_HP tadu ON mv.ACCT_NO = tadu.FACILITY_PARENT
+                INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+            WHERE
+                mv.CORP_ID = corpId
+                AND mv.corp_usr_id = userId
+                AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+                AND mv.PRODUCT = 'AUTOFINANCE'
+                AND mv.SUB_PRODUCT = 'HP'
+            GROUP BY mat.dscp, mv.ACCT_NO
+        )
+            GROUP BY subProductDesc
+    ;
+
+END OVERVIEW_SUMMARY;

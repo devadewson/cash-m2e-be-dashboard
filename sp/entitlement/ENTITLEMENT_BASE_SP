@@ -1,0 +1,4 @@
+INSERT INTO TBL_BASE_SP VALUES('get_sp_product_list', 'get_sp_product_list', 'userId, corpId', 'N', 'PROCEDURE');
+INSERT INTO TBL_BASE_SP VALUES('get_acct_list', 'get_acct_list', 'userId, corpId', 'N', 'PROCEDURE');
+INSERT INTO TBL_BASE_SP VALUES('acct_prod_entitlement', 'acct_prod_entitlement', 'userId, corpId', 'N', 'PROCEDURE');
+INSERT INTO TBL_BASE_SP VALUES('acct_prod_entitlement_cif', 'acct_prod_entitlement_cif', 'userId, corpId, corpCifNo, product', 'N', 'PROCEDURE');

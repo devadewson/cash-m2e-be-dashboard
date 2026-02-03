@@ -1,0 +1,13 @@
+name: Sonarqube
+env:
+  NODE_EXTRA_CA_CERTS: /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main , release** , develop , sit]
+
+jobs:
+  build-scan:
+   uses: MSS-GB/workflow/.github/workflows/sonarqube-java17.yml@main
+   secrets: inherit

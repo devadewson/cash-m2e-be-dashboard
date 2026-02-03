@@ -1,0 +1,3 @@
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_loan_account_stats','N','userId, corpId','other_bank_loan_account_stats','PROCEDURE');
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_loan_account_summary_list','Y','searchParam, userId, corpId, corpCifNo','other_bank_loan_account_summary_list','PROCEDURE');
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_loan_trx_hist_list','Y','acctNumber, startDate, startTime, endDate, endTime, amtFrom, amtTo, trxCode, searchParam, userId, corpId','other_bank_loan_trx_hist_list','PROCEDURE');

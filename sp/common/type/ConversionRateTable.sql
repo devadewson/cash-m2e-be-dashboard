@@ -1,0 +1,1 @@
+create or replace TYPE ConversionRateTable AS TABLE OF ConversionRateRec;

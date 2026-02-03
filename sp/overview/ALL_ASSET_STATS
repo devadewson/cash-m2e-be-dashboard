@@ -1,0 +1,508 @@
+create or replace PROCEDURE ALL_ASSET_STATS
+( corpId IN VARCHAR2,
+userId IN VARCHAR2,
+corpCifNo IN VARCHAR2, 
+baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+  )
+AS 
+
+m_prod_deposit_ca NUMBER := 0;
+m_prod_deposit_fd NUMBER := 0;
+m_prod_deposit_other NUMBER := 0;
+m_prod_deposit_overdraft NUMBER := 0;
+
+m_prod_investment NUMBER := 0;
+
+m_prod_cards_crc NUMBER := 0;
+m_prod_cards_chc NUMBER := 0;
+m_prod_cards_dc NUMBER := 0;
+
+m_prod_trade NUMBER := 0;
+
+m_prod_loan_termloan NUMBER := 0;
+m_prod_loan_rc NUMBER := 0;
+
+m_prod_af_hp NUMBER := 0;
+m_prod_af_fs NUMBER := 0;
+m_prod_af_bd NUMBER := 0;
+m_prod_af_pbr NUMBER := 0;
+
+v_asset_prod NUMBER := 0;
+v_liabilities_prod NUMBER := 0;
+
+v_asset_ratio NUMBER := 0;
+v_liabilities_ratio NUMBER := 0;
+m_latest_date VARCHAR2(20);
+baseCcy VARCHAR2(3) := 'MYR';
+
+BEGIN
+    baseCcy := GET_BASE_CURRENCY(corpId);  
+
+BEGIN
+-- for CURRENCT ACC DEPOSIT
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency_code, ledger_balance)), 2) AS totalAmount 
+into m_prod_deposit_ca
+    FROM
+       (
+		SELECT
+                currency_code,
+                ledger_balance,
+                ROW_NUMBER() OVER (PARTITION BY acct_no ORDER BY dt_created DESC) AS rn
+            FROM (
+                SELECT
+                    mv.acct_no,
+                    pdp.currency_code,
+                    pdp.ledger_balance,
+                    pdp.dt_created
+                FROM
+                    MV_USER_ENTITLEMENT mv
+                    LEFT JOIN TBL_PORTFOLIO_DP pdp ON mv.acct_no = pdp.account_no AND pdp.dt_created <= SYSDATE - INTERVAL '1' DAY
+                    INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+                WHERE 
+                     mv.CORP_ID = corpId AND mv.corp_usr_id = userId
+                    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+                    AND mv.product = 'DEPOSIT'
+                    AND mv.sub_product IN ('CA', 'FCA', 'MFCA')
+                )
+	) WHERE rn = 1; 
+IF m_prod_deposit_ca IS NULL THEN
+    m_prod_deposit_ca := 0;  -- Default value or handling
+END IF;     
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_deposit_ca := 0;  -- Default value or handling
+END;
+
+BEGIN
+-- for FIXED DEPOSIT
+/* SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency_code, principal_amount)), 2) AS totalAmount
+into m_prod_deposit_fd
+    FROM (
+        SELECT
+            tadu.principal_amount AS principal_amount,
+            tadu.currency_code 
+        FROM
+        MV_USER_ENTITLEMENT mv
+        LEFT JOIN TBL_PORTFOLIO_FD tadu ON mv.acct_no = tadu.account_no
+        inner join TBL_MT_ACCT_TYP@cts_sso mat on mv.SUB_PRODUCT = mat.cd
+        WHERE
+            mv.CORP_ID = corpId
+            AND mv.corp_usr_id = userId
+            AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+            AND mv.PRODUCT = 'DEPOSIT'
+            AND mv.SUB_PRODUCT = 'FD'
+        )  ; */
+
+SELECT MAX(TRUNC(pdp.dt_created)) AS latest_date into m_latest_date
+    FROM MV_USER_ENTITLEMENT mv
+    LEFT JOIN TBL_PORTFOLIO_FD pdp 
+        ON mv.acct_no = pdp.account_no
+   WHERE  (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+        AND mv.corp_usr_id = userId 
+        AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+      AND mv.product = 'DEPOSIT'
+      AND mv.sub_product = 'FD';
+
+SELECT ROUND(SUM(
+        CASE 
+            WHEN TRUNC(pdp.dt_created) = m_latest_date THEN 
+                CONVERT_CURRENCY_NEW(corpId, baseCcy, pdp.currency_code, pdp.principal_amount) 
+            ELSE 
+                0 
+        END), 2) AS totalAmount
+into m_prod_deposit_fd
+FROM 
+    MV_USER_ENTITLEMENT mv
+    LEFT JOIN TBL_PORTFOLIO_FD pdp 
+        ON mv.acct_no = pdp.account_no
+    INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+WHERE 
+   (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+        AND mv.corp_usr_id = userId 
+        AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+--    AND mv.cif_no = '001020646'
+    AND mv.product = 'DEPOSIT'
+    AND mv.sub_product = 'FD';
+
+IF m_prod_deposit_fd IS NULL THEN
+    m_prod_deposit_fd := 0;  -- Default value or handling
+END IF;   
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_deposit_fd := 0;  -- Default value or handling
+END;
+
+BEGIN
+-- for UNIT TRUST
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency, totalAmounts)), 2) as totalAmount 
+into m_prod_investment
+		FROM 
+        ( 
+       SELECT 
+        tadu.CURRENCY AS currency,
+        SUM(tadu.TOTAL_VALUE) AS totalAmounts
+        FROM 
+        MV_USER_ENTITLEMENT mv
+        inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+        inner join tbl_mt_acct_prod_typ@CTS_SSO mat on mat.cd = mv.product
+        left join TBL_Portfolio_UT tadu on  mv.cif_no = tadu.CIF_NUMBER
+		WHERE 
+        mv.CORP_ID = corpId 
+        AND mv.corp_usr_id = userId
+        AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+        AND mv.PRODUCT = 'INVESTMENT'
+        AND mv.SUB_PRODUCT = 'UT'
+        AND TRUNC(tadu.DT_CREATED) = (SELECT MAX(TRUNC(DT_CREATED)) FROM TBL_Portfolio_UT) GROUP BY tadu.CURRENCY);
+IF m_prod_investment IS NULL THEN
+    m_prod_investment := 0;  -- Default value or handling
+END IF; 
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_investment := 0;  -- Default value or handling
+END;
+
+BEGIN
+-- for OTHER BANKS DEPOSIT    
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency, totalAmount)), 2) as totalAmount 
+into m_prod_deposit_other
+FROM
+(
+SELECT 
+    tadu.OPE_BAL_CURR AS currency,
+   -- COALESCE(max(tadu.ope_bal_amount) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED),0.00) as totalAmount
+   COALESCE(sum(tadu.ope_bal_amount),0.00) AS totalAmount
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join tbl_portfolio_activity_swift tadu on  mv.ACCT_NO = tadu.ACCOUNT_ID 
+WHERE
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+     AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'DEPOSIT'
+    AND mv.is_add_oth_bank_acct = 'Y'
+    group by tadu.OPE_BAL_CURR
+    ) ;
+
+IF m_prod_deposit_other IS NULL THEN
+    m_prod_deposit_other := 0;  -- Default value or handling
+END IF;    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_deposit_other := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.unutilised_amount)), 2) AS totalAmount 
+INTO m_prod_deposit_overdraft
+    FROM 
+     MV_USER_ENTITLEMENT mv
+    left join TBL_Portfolio_dp tadu on mv.acct_no = tadu.ACCOUNT_NO 
+WHERE 
+     mv.CORP_ID = corpId
+        AND mv.corp_usr_id = userId
+        AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+        AND tadu.is_od = 'Y'; -- for overdraft
+    
+IF m_prod_deposit_overdraft IS NULL THEN
+    m_prod_deposit_overdraft := 0;  -- Default value or handling
+END IF;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_deposit_overdraft := 0;  -- Default value or handling
+END;
+
+BEGIN
+
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.OUTSTANDING_BALANCE)), 2) AS totalAmount 
+into m_prod_loan_termloan
+    FROM 
+        MV_USER_ENTITLEMENT mv
+        inner join tbl_mt_acct_typ@cts_sso mat on mat.cd = mv.sub_product
+        left join TBL_PORTFOLIO_LN tadu on mv.ACCT_NO = tadu.ACCOUNT_NO
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+   AND mv.PRODUCT = 'LOAN'
+   AND mv.SUB_PRODUCT = 'TL'; -- TERM LOAN
+IF m_prod_loan_termloan IS NULL THEN
+    m_prod_loan_termloan := 0;  -- Default value or handling
+END IF;    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_loan_termloan := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY_CODE, tadu.outstanding_balance)), 2) AS totalAmount 
+into m_prod_loan_rc
+    FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    left join TBL_Portfolio_STRC tadu on mv.cif_no = tadu.CIF_NO 
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId 
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'LOAN'
+    AND mv.SUB_PRODUCT = 'RC' --Revolving Credit
+    AND TRUNC(tadu.DT_CREATED) = (SELECT MAX(TRUNC(DT_CREATED)) FROM TBL_Portfolio_STRC); --Revolving Credit
+IF m_prod_loan_rc IS NULL THEN
+    m_prod_loan_rc := 0;  -- Default value or handling
+END IF; 
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_loan_rc := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.FACILITY_CURRENCY, tadu.outstanding_balance)), 2) AS totalAmount 
+into m_prod_af_hp
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_HP tadu on mv.ACCT_NO = tadu.FACILITY_PARENT 
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'HP';
+IF m_prod_af_hp IS NULL THEN
+    m_prod_af_hp := 0;  -- Default value or handling
+END IF;     
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_af_hp := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.outstanding_balance)), 2) AS totalAmount 
+into m_prod_af_fs
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_FS tadu on  mv.ACCT_NO = tadu.ACCOUNT_NO 
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'FS'; -- floor stock
+IF m_prod_af_fs IS NULL THEN
+    m_prod_af_fs := 0;  -- Default value or handling
+END IF;    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_af_fs := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.outstanding_balance)), 2) AS totalAmount 
+into m_prod_af_bd
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_BD tadu on mv.ACCT_NO = tadu.ACCOUNT_NO  
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'BD'; -- block discounting
+IF m_prod_af_bd IS NULL THEN
+    m_prod_af_bd := 0;  -- Default value or handling
+END IF;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_af_bd := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.CURRENT_BALANCE)), 2) AS totalAmount 
+into m_prod_af_pbr
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_PBR tadu on mv.ACCT_NO = tadu.ACCOUNT_NO AND tadu.CURRENCY = mv.currency  
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'AUTOFINANCE'
+    AND mv.SUB_PRODUCT = 'PBR';  --payment before reg
+IF m_prod_af_pbr IS NULL THEN
+    m_prod_af_pbr := 0;  -- Default value or handling
+END IF;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_af_pbr := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.OUTSTANDING)), 2) AS totalAmount 
+into m_prod_trade
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_TRD tadu on mv.CIF_NO = tadu.cif_no 
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'TRADE'
+    AND mv.SUB_PRODUCT = 'TRD'  -- all trades
+    and tadu.category in ('I','E','L','G');
+
+IF m_prod_trade IS NULL THEN
+    m_prod_trade := 0;  -- Default value or handling
+END IF;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_trade := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.AVAILABLE_SPENDING_LIMIT_DAILY)), 2) AS totalAmount 
+into m_prod_cards_dc
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_DC tadu on mv.CIF_NO = tadu.cif_no 
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'CARDS'
+    AND mv.SUB_PRODUCT = 'DC';  -- which one is corporate cards??
+
+IF m_prod_cards_dc IS NULL THEN
+    m_prod_cards_dc := 0;  -- Default value or handling
+END IF;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_cards_dc := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.CURRENCY, tadu.OUTSTANDING_BALANCE)), 2) AS totalAmount 
+into m_prod_cards_crc
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_CRC tadu on mv.CIF_NO = tadu.cif_no
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'CARDS'
+    AND mv.SUB_PRODUCT = 'CRC';  -- which one is corporate cards??
+
+IF m_prod_cards_crc IS NULL THEN
+    m_prod_cards_crc := 0;  -- Default value or handling
+END IF;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_cards_crc := 0;  -- Default value or handling
+END;
+
+BEGIN
+SELECT ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, 'MYR', tadu.OUTSTANDING_BALANCE)), 2) AS totalAmount 
+into m_prod_cards_chc
+FROM 
+    MV_USER_ENTITLEMENT mv
+    inner join TBL_MT_ACCT_TYP@CTS_SSO mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@CTS_SSO mapt on mapt.cd = mv.product
+    left join TBL_PORTFOLIO_CHC tadu on mv.CIF_NO = tadu.cif_no 
+WHERE 
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND mv.PRODUCT = 'CARDS'
+    AND mv.SUB_PRODUCT = 'CHC';  -- which one is corporate cards??
+
+IF m_prod_cards_chc IS NULL THEN
+    m_prod_cards_chc := 0;  -- Default value or handling
+END IF;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        m_prod_cards_chc := 0;  -- Default value or handling
+END;
+
+BEGIN
+v_asset_prod := COALESCE(m_prod_deposit_ca, 0) + 
+                          COALESCE(m_prod_deposit_fd, 0) + 
+                          COALESCE(m_prod_deposit_other, 0) + 
+                          COALESCE(m_prod_investment, 0);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        v_asset_prod := 0;  -- Default value or handling
+END;
+
+BEGIN
+v_liabilities_prod := COALESCE(m_prod_deposit_overdraft, 0) + 
+                          COALESCE(m_prod_cards_crc, 0) + 
+                          COALESCE(m_prod_cards_chc, 0) + 
+                          COALESCE(m_prod_cards_dc, 0) + 
+                          COALESCE(m_prod_trade, 0) + 
+                          COALESCE(m_prod_loan_termloan, 0) + 
+                          COALESCE(m_prod_loan_rc, 0) + 
+                          COALESCE(m_prod_af_hp, 0) + 
+                          COALESCE(m_prod_af_fs, 0) + 
+                          COALESCE(m_prod_af_bd, 0) + 
+                          COALESCE(m_prod_af_pbr, 0);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        v_liabilities_prod := 0;  -- Default value or handling
+END;
+-- exclude fixed deposit
+BEGIN
+v_asset_ratio := COALESCE(m_prod_deposit_ca, 0) + 
+                 COALESCE(m_prod_deposit_other, 0) + 
+                 COALESCE(m_prod_investment, 0);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        v_asset_ratio := 0;  -- Default value or handling
+END;
+-- exclude term loan
+BEGIN
+    v_liabilities_ratio := COALESCE(m_prod_deposit_overdraft, 0) + 
+                           COALESCE(m_prod_cards_crc, 0) + 
+                           COALESCE(m_prod_cards_chc, 0) + 
+                           COALESCE(m_prod_cards_dc, 0) + 
+                           COALESCE(m_prod_trade, 0) + 
+                           COALESCE(m_prod_loan_rc, 0) + 
+                           COALESCE(m_prod_af_hp, 0) + 
+                           COALESCE(m_prod_af_fs, 0) + 
+                           COALESCE(m_prod_af_bd, 0) + 
+                           COALESCE(m_prod_af_pbr, 0);
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        v_liabilities_ratio := 0;  -- Default value if no data found
+END;
+
+  OPEN CURSOR FOR
+    SELECT 
+        TO_CHAR(TRUNC(SYSDATE) - 1, 'DD-Mon-YYYY') as lastUpdatedDate, 
+        v_asset_prod AS totalAsset, 
+        v_liabilities_prod AS totalLiabilities, 
+        v_asset_ratio AS totalAssetRatio, 
+        v_liabilities_ratio AS totalLiabilitiesRatio
+        FROM dual; 
+
+END ALL_ASSET_STATS;

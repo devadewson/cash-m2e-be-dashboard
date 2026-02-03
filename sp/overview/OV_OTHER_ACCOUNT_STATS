@@ -1,0 +1,37 @@
+create or replace PROCEDURE OV_OTHER_ACCOUNT_STATS
+(
+  corpId IN VARCHAR2,
+  userId IN VARCHAR2,
+  corpCifNo IN VARCHAR2,
+  baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+    baseCcy VARCHAR2(3) := 'MYR';
+BEGIN
+    baseCcy := GET_BASE_CURRENCY(corpId);
+
+OPEN CURSOR FOR
+SELECT
+    mat.cd AS subProduct,
+    mapt.dscp as subProductDesc,
+    'Opening Balance' as label,
+    'MYR' AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+  --  COALESCE(max(tadu.ope_bal_amount) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED),0.00) as totalAmount
+   ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.OPE_BAL_CURR, tadu.ope_bal_amount)), 2) AS totalAmount
+FROM
+    MV_USER_ENTITLEMENT mv
+    inner join tbl_mt_acct_typ@cts_sso mat on mat.cd = mv.sub_product
+    inner join tbl_mt_acct_prod_typ@cts_sso mapt on mapt.cd = mv.product
+    left join tbl_portfolio_activity_swift tadu on  mv.ACCT_NO = tadu.ACCOUNT_ID
+WHERE
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+ --   AND mv.PRODUCT = 'DEPOSIT'
+    AND mv.is_add_oth_bank_acct = 'Y'
+--    AND mv.SUB_PRODUCT = tadu.MT_TYPE
+GROUP BY
+    mat.cd, mapt.dscp;
+
+END OV_OTHER_ACCOUNT_STATS;

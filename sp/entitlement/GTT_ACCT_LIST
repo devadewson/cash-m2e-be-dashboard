@@ -1,0 +1,11 @@
+-- ===============================
+-- 	CREATE GTT
+-- ===============================
+CREATE GLOBAL TEMPORARY TABLE GTT_ACCT_LIST(
+    ACCT_NUMBER NVARCHAR2(50),
+    ACCT_PROD_TYPE NVARCHAR2(50),
+    ACCT_SUB_PROD_TYPE NVARCHAR2(50)
+) ON COMMIT PRESERVE ROWS;
+
+
+

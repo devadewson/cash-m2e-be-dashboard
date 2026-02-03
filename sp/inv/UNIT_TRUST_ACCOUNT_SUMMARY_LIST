@@ -1,0 +1,42 @@
+create or replace NONEDITIONABLE PROCEDURE         UNITTRUST_ACCOUNT_SUMMARY_LIST
+(
+  pageNumber IN NUMBER,
+  pageSize IN NUMBER,
+  corpId IN VARCHAR2,
+  searchKey IN VARCHAR2,
+  userId IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+    v_total_page NUMBER;
+   v_record_size NUMBER;
+   v_start_index NUMBER;
+   v_end_index NUMBER;
+BEGIN
+    v_start_index := (pageNumber - 1) * pageSize + 1;
+    v_end_index := pageNumber * pageSize;
+OPEN CURSOR FOR
+ SELECT *
+        FROM (
+  select a.ACCT_NM AS accountName
+  , a.ACCT_NO  as accountNo
+  , a.CURRENCY AS currency
+  , a.ACCT_PREF_NM
+  , a.IS_ISLAMIC
+  , count(ut.FUND_NAME) AS noOfFunds
+  , sum (ut.TOTAL_VALUE) as totalEstMarketValue
+  , ROW_NUMBER() OVER (ORDER BY a.cif_nm) as row_num
+    from tbl_corp c
+    inner join tbl_corp_usr_group cug on c.id = cug.corp_id
+    inner join tbl_corp_usr_group_usr cugu on cug.id = cugu.corp_usr_group_id
+    inner join tbl_corp_usr_group_acct cuga on cugu.corp_usr_group_id = cuga.corp_usr_group_id
+    inner join tbl_corp_accts ca on cuga.corp_acct_id = ca.id
+    inner join tbl_acct a on ca.acct_id = a.id
+    inner join TBL_Portfolio_UT@SSODEV_CTSDEV ut on c.cif_no = ut.CIF_NUMBER AND a.ACCT_NO = ut.ACCOUNT_NO
+    where cugu.corp_usr_id = userId
+    AND (c.corp_id = corpId OR corpId IS NULL)
+    AND (searchKey is null OR (LENGTH(searchKey) >= 3 AND ((UPPER(a.ACCT_NO) LIKE '%' || UPPER(searchKey) || UPPER(searchKey) || '%'))))
+   GROUP BY a.IS_ISLAMIC, a.ACCT_PREF_NM, a.ACCT_NM, a.ACCT_NO, a.CURRENCY, a.cif_nm
+    ORDER BY CASE WHEN a.IS_ISLAMIC = 'Y' THEN 1 ELSE 0 END DESC, a.ACCT_PREF_NM ASC, a.ACCT_NM ASC)
+    WHERE row_num BETWEEN v_start_index AND v_end_index;
+
+END UNITTRUST_ACCOUNT_SUMMARY_LIST;

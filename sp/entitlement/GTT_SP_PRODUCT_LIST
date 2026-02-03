@@ -1,0 +1,12 @@
+-- ===============================
+-- 	CREATE GTT
+-- ===============================
+CREATE GLOBAL TEMPORARY TABLE GTT_SP_PRODUCT_LIST(
+    SP_PRODUCT_CD NVARCHAR2(50)
+) ON COMMIT PRESERVE ROWS;
+
+CREATE INDEX idx_cugp_corp_usr_group_id ON TBL_CORP_USR_GROUP_PROD (CORP_USR_GROUP_ID);
+CREATE INDEX idx_cugp_mt_prod_grp_id ON TBL_CORP_USR_GROUP_PROD (MT_PROD_GRP_ID);
+CREATE INDEX idx_mpg_mt_sp_prod_id ON TBL_MT_PROD_GRP (MT_SP_PROD_ID);
+CREATE INDEX idx_mpg_mt_pvd_id ON TBL_MT_PROD_GRP (MT_PVD_ID);
+CREATE INDEX idx_c_mt_pvd_id ON TBL_CORP (MT_PVD_ID);

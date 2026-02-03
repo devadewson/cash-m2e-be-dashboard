@@ -1,0 +1,44 @@
+create or replace NONEDITIONABLE PROCEDURE GET_ACCT_LIST
+(
+    userId IN VARCHAR2,
+    corpId IN VARCHAR2,
+    cursor OUT SYS_REFCURSOR
+) AS
+
+v_is_entitle_od NUMBER := 0;
+
+BEGIN
+    select count(distinct dp.account_no) into v_is_entitle_od
+    from mv_user_entitlement@SSO_CTS mv
+    inner join tbl_portfolio_dp@SSO_CTS dp on mv.acct_no = dp.account_no
+    where dp.facility_limit is not null and dp.facility_limit > 0
+    and mv.corp_usr_id = userId and mv.corp_id = corpId;
+
+    insert into GTT_ACCT_LIST(ACCT_NUMBER, ACCT_PROD_TYPE, ACCT_SUB_PROD_TYPE)
+    select distinct
+            mv.acct_no,
+            case
+                when mv.is_add_oth_bank_acct = 'Y' then to_nchar('OTHER')
+                when mv.product = 'TRADE' and trd.category in ('I', 'E', 'G', 'L') then to_nchar('TRADE')
+                when (v_is_entitle_od > 0 and mv.sub_product = 'CA') then to_nchar('LOAN')
+                else mv.product
+            end as ACCT_PROD_TYPE,
+            case
+                when mv.is_add_oth_bank_acct = 'Y' then mv.product
+                when mv.product = 'TRADE' and trd.category = 'I' then to_nchar('IMP')
+                when mv.product = 'TRADE' and trd.category = 'E' then to_nchar('EXP')
+                when mv.product = 'TRADE' and trd.category = 'G' then to_nchar('GRT')
+                when mv.product = 'TRADE' and trd.category = 'L' then to_nchar('LOAN')
+                when (v_is_entitle_od > 0 and mv.sub_product = 'CA') then to_nchar('OD')
+                else mv.sub_product
+            end as ACCT_SUB_PROD_TYPE
+        from MV_USER_ENTITLEMENT mv
+            inner join tbl_mt_acct_typ mat on mat.cd = mv.sub_product
+            inner join tbl_mt_acct_prod_typ mapt on mapt.cd = mv.product
+            left join tbl_portfolio_trd trd on mv.cif_no = trd.cif_no and mv.product = 'TRADE'
+            where mv.corp_usr_id = userId and mv.corp_id = corpId;
+
+    open cursor for
+        select distinct ACCT_NUMBER as acctNumber, ACCT_PROD_TYPE as acctProdType, ACCT_SUB_PROD_TYPE as acctSubProdType from GTT_ACCT_LIST;
+
+END GET_ACCT_LIST;

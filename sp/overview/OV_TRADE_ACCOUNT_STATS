@@ -1,0 +1,49 @@
+create or replace PROCEDURE OV_TRADE_ACCOUNT_STATS
+(
+  corpId IN VARCHAR2,
+  userId IN VARCHAR2,
+  corpCifNo IN VARCHAR2,
+  baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+    baseCcy VARCHAR2(3);
+
+BEGIN
+    -- Fetch base currency by calling the GET_BASE_CURRENCY function
+    baseCcy := GET_BASE_CURRENCY(corpId);
+
+OPEN CURSOR FOR
+SELECT
+   case
+        when tadu.category = 'I' then to_nchar('I')
+        when tadu.category = 'E' then to_nchar('E')
+        when tadu.category = 'G' then to_nchar('G')
+        when tadu.category = 'L' then to_nchar('L')
+        else tadu.category end as subProduct,
+
+    case
+        when tadu.category = 'I' then to_nchar('Import')
+        when tadu.category = 'E' then to_nchar('Export')
+        when tadu.category = 'G' then to_nchar('Guarantee')
+        when tadu.category = 'L' then to_nchar('Trade Loan')
+        else tadu.category end as subProductDesc,
+    'Outstanding Balance' as label,
+   'MYR' AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, tadu.currency, tadu.outstanding)), 2) AS totalAmount
+    FROM
+     TBL_PORTFOLIO_TRD tadu, MV_USER_ENTITLEMENT mv, TBL_MT_ACCT_TYP@cts_sso mat
+WHERE
+    tadu.CIF_NO = mv.cif_no
+   AND mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+--    AND tadu.CURRENCY = baseCurrency
+    AND mv.PRODUCT = 'TRADE'
+    AND mv.sub_PRODUCT = 'TRD'
+    AND mv.sub_PRODUCT = mat.cd
+    and tadu.category in ('I','E','L','G') --IS THIS THE SUB PRODUCT?
+GROUP BY
+     tadu.category;
+
+END OV_TRADE_ACCOUNT_STATS;

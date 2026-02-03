@@ -1,0 +1,10 @@
+package com.m2e.dashboard.dto.entitlement.request;
+
+import lombok.Data;
+
+@Data
+public class EntitlementReqDto {
+    private String openTaggedCorpId;
+    private String corpCifNo;
+    private String product;
+}

@@ -1,0 +1,24 @@
+create or replace NONEDITIONABLE PROCEDURE GET_SP_PRODUCT_LIST
+(
+    userId IN VARCHAR2,
+    corpId IN VARCHAR2,
+    cursor OUT SYS_REFCURSOR
+) AS
+BEGIN
+
+    insert into GTT_SP_PRODUCT_LIST(SP_PRODUCT_CD)
+        select mp.cd
+        from tbl_corp@cts_sso c
+        inner join tbl_corp_usr_group@cts_sso cug on c.id = cug.corp_id
+        inner join tbl_corp_usr_group_usr@cts_sso cugu on cug.id = cugu.corp_usr_group_id
+        inner join tbl_corp_usr_group_prod@cts_sso cugp on cug.id = cugp.corp_usr_group_id
+        inner join tbl_mt_prod_grp@cts_sso mpg on cugp.mt_prod_grp_id = mpg.id
+        inner join tbl_mt_sp_prod@cts_sso mp on mpg.mt_sp_prod_id = mp.id
+        where mpg.mt_pvd_id = c.mt_pvd_id
+        and cugu.corp_usr_id = userId
+        and c.corp_id = corpId;
+
+    open cursor for
+        select SP_PRODUCT_CD as productCode from GTT_SP_PRODUCT_LIST;
+
+END GET_SP_PRODUCT_LIST;

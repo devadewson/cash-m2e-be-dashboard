@@ -1,0 +1,21 @@
+create or replace PROCEDURE UT_ACCT_STATS
+(
+  corpId IN VARCHAR2,
+  userId IN VARCHAR2,
+  corpCifNo IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+BEGIN
+OPEN CURSOR FOR
+  		SELECT COUNT(DISTINCT mv.ACCT_NO) as totNoOfAccounts,
+  		COUNT(ut.id) as totNoOfFunds,
+  		Coalesce(0,sum(ut.TOTAL_VALUE)) AS consTotEstMarketValue
+		from TBL_Portfolio_UT ut
+        inner join MV_USER_ENTITLEMENT mv on mv.ACCT_NO = ut.ACCOUNT_NO
+        where mv.CORP_USR_ID = userId
+        --and (mv.CORP_ID = corpId OR corpId IS NULL)
+        and (mv.Cif_no = corpCifNo OR corpCifNo IS NULL)
+        and mv.PRODUCT = 'INVESTMENT'
+        AND mv.SUB_PRODUCT = 'UT';
+
+END UT_ACCT_STATS;

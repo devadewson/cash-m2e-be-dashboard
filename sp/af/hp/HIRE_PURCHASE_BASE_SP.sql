@@ -1,0 +1,4 @@
+INSERT INTO TBL_BASE_SP VALUES('hire_purchase_account_stats', 'hire_purchase_account_stats', 'userId, corpId', 'N', 'PROCEDURE');
+INSERT INTO TBL_BASE_SP VALUES('hire_purchase_account_listing', 'hire_purchase_account_listing', 'searchParam, userId, corpId', 'Y', 'PROCEDURE');
+INSERT INTO TBL_BASE_SP VALUES('hire_purchase_account_detail', 'hire_purchase_account_detail', 'acctNumber, accountLevel, userId, corpId', 'N', 'PROCEDURE');
+INSERT INTO TBL_BASE_SP VALUES('hire_purchase_trx_history_listing', 'hire_purchase_trx_history_listing', 'acctNumber, searchParam, trxCode, startDateTime, endDateTime, amtFrom, amtTo, userId, corpId', 'Y', 'PROCEDURE');

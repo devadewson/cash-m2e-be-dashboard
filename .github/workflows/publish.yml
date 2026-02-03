@@ -1,0 +1,33 @@
+name: Publish
+env:
+  NODE_EXTRA_CA_CERTS: /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+
+on:
+  push:
+    tags:
+      - 'release/*/*'
+
+jobs:
+  extract-version:
+   runs-on: mbb-enterprise-runner-set
+   outputs:
+      version: ${{ steps.extract.outputs.version }}
+   steps:
+      - name: Extract version
+        id: extract
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"    
+          VERSION=$(echo "$TAG_NAME" | cut -d'/' -f3 | sed 's/^v//')  
+          echo "Extracted version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+  
+  build-modules:
+    uses: MSS-DEVOPS/workflow-library/.github/workflows/mvn-publish.yml@main
+    needs : extract-version
+    with:
+      java_version: "17"
+      skip_tests: "true"
+      profile: nexus-repository
+      build_version : "${{ needs.extract-version.outputs.version }}"
+      runner_label: mss-gb-runners
+    secrets : inherit

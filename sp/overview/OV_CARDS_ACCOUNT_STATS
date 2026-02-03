@@ -1,0 +1,81 @@
+create or replace PROCEDURE OV_CARDS_ACCOUNT_STATS
+(
+  corpId IN VARCHAR2,
+  userId IN VARCHAR2,
+  corpCifNo IN VARCHAR2,
+  baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+) AS
+BEGIN
+OPEN CURSOR FOR
+SELECT
+    mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    'MYR' AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.balance) AS totalAmount
+    max(tadu.OUTSTANDING_BALANCE) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+    FROM
+    MV_USER_ENTITLEMENT mv
+    INNER JOIN tbl_portfolio_chc tadu ON mv.cif_no = tadu.cif_no
+    INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+WHERE
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+--    AND tadu.CURRENCY = baseCurrency -- get from provider
+    AND mv.SUB_PRODUCT = 'CHC' -- ('DC','CRC','CHC')
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+   mat.cd, mat.dscp
+
+UNION
+
+SELECT
+    mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    TO_CHAR(tadu.CURRENCY) AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.balance) AS totalAmount
+    max(tadu.OUTSTANDING_BALANCE) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+    FROM
+    MV_USER_ENTITLEMENT mv
+    INNER JOIN tbl_portfolio_crc tadu ON mv.cif_no = tadu.cif_no
+    INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+WHERE
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND tadu.CURRENCY = baseCurrency -- get from provider
+    AND mv.SUB_PRODUCT = 'CRC' -- ('DC','CRC','CHC')
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+    mat.cd, mat.dscp, tadu.CURRENCY
+
+UNION
+
+SELECT
+     mat.cd AS subProduct,
+    mat.dscp as subProductDesc,
+    'Outstanding Balance' as label,
+    TO_CHAR(tadu.CURRENCY) AS currency,
+    COUNT(mv.ACCT_NO) AS totNoOfAccounts,
+    --SUM(tadu.balance) AS totalAmount
+    max(tadu.AVAILABLE_SPENDING_LIMIT_DAILY) keep (DENSE_RANK LAST ORDER BY tadu.DT_CREATED) as totalAmount
+    FROM
+    MV_USER_ENTITLEMENT mv
+    INNER JOIN tbl_portfolio_dc tadu ON mv.cif_no = tadu.cif_no
+    INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+WHERE
+    mv.CORP_ID = corpId
+    AND mv.corp_usr_id = userId
+    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+    AND tadu.CURRENCY = baseCurrency
+    AND mv.SUB_PRODUCT = 'DC' -- ('DC','CRC','CHC')
+    AND mv.SUB_PRODUCT = mat.cd
+GROUP BY
+    mat.cd, mat.dscp, tadu.CURRENCY;
+
+END OV_CARDS_ACCOUNT_STATS;

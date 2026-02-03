@@ -1,0 +1,105 @@
+create or replace PROCEDURE OV_DEPOSIT_ACC_STATS
+( corpId IN VARCHAR2,
+userId IN VARCHAR2,
+corpCifNo IN VARCHAR2,
+baseCurrency IN VARCHAR2,
+  CURSOR OUT SYS_REFCURSOR
+  )
+AS
+    baseCcy VARCHAR2(3) := 'MYR';
+BEGIN
+    baseCcy := GET_BASE_CURRENCY(corpId);
+
+OPEN CURSOR FOR
+    WITH LatestDates AS (
+SELECT MAX(TRUNC(pdp.dt_created)) AS latest_date
+    FROM MV_USER_ENTITLEMENT mv
+    LEFT JOIN TBL_PORTFOLIO_FD pdp ON mv.acct_no = pdp.account_no
+    WHERE  (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+                AND mv.corp_usr_id = userId
+                AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+                AND mv.product = 'DEPOSIT'
+                AND mv.sub_product = 'FD'
+
+    )
+
+    SELECT
+        subProduct AS subProduct,
+        subProductDesc AS subProductDesc,
+        'Ledger Balance' as label,
+        'MYR' AS currency,
+        COUNT(acct_no) AS totNoOfAccounts,
+         MAX(dt_created) AS dateUpdated, -- Use MAX() to aggregate the dates
+ --       MAX(ledger_balance) AS totalAmount
+        ROUND(SUM(CONVERT_CURRENCY_NEW(corpId, baseCcy, currency_code, ledger_balance)), 2) AS totalAmount
+    FROM
+       (
+            SELECT
+                acct_no,
+                currency_code,
+                ledger_balance,
+                dt_created,
+                dt_updated,
+                corp_id,
+                subProduct,
+                subProductDesc,
+                ROW_NUMBER() OVER (PARTITION BY acct_no ORDER BY dt_created DESC) AS rn
+            FROM (
+                SELECT
+                    mv.acct_no,
+                    pdp.currency_code,
+                    pdp.ledger_balance,
+                    pdp.dt_created,
+                    pdp.dt_updated,
+                    mv.corp_id,
+                    mat.cd AS subProduct,
+                    mat.dscp AS subProductDesc
+                FROM
+                    MV_USER_ENTITLEMENT mv
+                    LEFT JOIN TBL_PORTFOLIO_DP pdp ON mv.acct_no = pdp.account_no AND pdp.dt_created <= SYSDATE - INTERVAL '1' DAY
+                    INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat ON mv.SUB_PRODUCT = mat.cd
+                WHERE
+                    (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+                    AND mv.corp_usr_id = userId
+                    AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+                    AND mv.product = 'DEPOSIT'
+                    AND mv.sub_product IN ('CA', 'FCA', 'MFCA')
+
+            )
+       )
+    WHERE rn = 1
+    GROUP BY subProduct, subProductDesc
+
+    UNION
+
+    SELECT
+    mat.cd AS subProduct,
+    mat.dscp AS subProductDesc,
+    'Principal Amount' AS label,
+    'MYR' AS currency,
+   COUNT(DISTINCT mv.acct_no) AS totNoOfAccounts,  -- Count all accounts, even those without amounts for latest date
+    ld.latest_date AS dateUpdated,
+    ROUND(SUM(
+        CASE
+            WHEN TRUNC(pdp.dt_created) = ld.latest_date THEN
+                CONVERT_CURRENCY_NEW(corpId, baseCcy, pdp.currency_code, pdp.principal_amount)
+            ELSE
+                0
+        END), 2) AS totalAmount  -- Sum amounts only for accounts with data on the latest date
+    FROM
+        MV_USER_ENTITLEMENT mv
+        LEFT JOIN TBL_PORTFOLIO_FD pdp
+            ON mv.acct_no = pdp.account_no
+        INNER JOIN TBL_MT_ACCT_TYP@cts_sso mat
+            ON mv.SUB_PRODUCT = mat.cd
+        CROSS JOIN LatestDates ld  -- Use CROSS JOIN to bring in the latest date
+    WHERE
+        (mv.CORP_ID = corpId OR corpId IS NULL OR corpId = '')
+        AND mv.corp_usr_id = userId
+        AND (mv.cif_no = corpCifNo OR corpCifNo IS NULL OR mv.cif_no IS NULL)
+        AND mv.product = 'DEPOSIT'
+        AND mv.sub_product = 'FD'
+    GROUP BY
+        mat.cd, mat.dscp, ld.latest_date;
+
+END OV_DEPOSIT_ACC_STATS;

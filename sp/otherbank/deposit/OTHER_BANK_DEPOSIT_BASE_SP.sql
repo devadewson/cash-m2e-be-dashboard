@@ -1,0 +1,4 @@
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_deposit_account_stats','N','userId, corpId','other_bank_deposit_account_stats','PROCEDURE');
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_deposit_account_summary_list','Y','searchParam, userId, corpId, corpCifNo','other_bank_deposit_account_summary_list','PROCEDURE');
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_account_detail','N','acctNumber, userId, corpId','other_bank_account_detail','PROCEDURE');
+INSERT INTO TBL_BASE_SP (ID,IS_PAGINATE,PARAMETER,SP_NAME,OBJECT_TYPE) VALUES ('other_bank_deposit_trx_hist_list','Y','acctNumber, startDate, startTime, endDate, endTime, amtFrom, amtTo, trxCode, searchParam, userId, corpId','other_bank_deposit_trx_hist_list','PROCEDURE');
