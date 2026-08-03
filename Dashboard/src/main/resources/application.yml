@@ -1,0 +1,278 @@
+spring:
+  application:
+    name: M2E-DASHBOARD
+
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: true
+        dialect: org.hibernate.dialect.Oracle12cDialect
+
+  cloud:
+    discovery:
+      enabled: true
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+
+  data:
+    redis:
+      host: 172.31.196.41
+      port: 6379
+      timeout: 2s
+      password: ENC(ttLg0q1psDkx+YSijlcsHTEysFNoZV3iFHouxEXFw3+4hQ7PvHAqk17UXe+bFJLk)
+
+server:
+  port: 9015
+  servlet:
+    context-path: /dashboard
+  error:
+    include-message: always
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    serviceUrl:
+      defaultZone: ${EUREKA_URI:http://localhost:9012/eureka}
+  instance:
+    preferIpAddress: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    doc-expansion: none
+    tagsSorter: alpha
+
+entitlement:
+  enabled: false
+
+resilience4j:
+  timelimiter:
+    instances:
+      esbClientService:
+        timeout-duration: 59s
+        cancel-running-future: true
+
+cache:
+  ttl: 5m
+
+logger:
+  path: /app/cfo/Dashboard/logs
+
+logstash:
+  host: 172.31.196.41:5044
+
+m2e:
+  implementation: production
+
+  integration:
+    eim:
+      url: https://172.31.196.126:8445
+      uri:
+        einvoice:
+          list: /eim-ws/api/v1/einvoice/list-e-invoice
+          download: /eim-ws/api/v1/einvoice/download
+          linkStatus: /eim-ws/api/v1/einvoices/{gcif}/link-status
+          updateLinkStatus: /eim-ws/api/v1/einvoices/update-link-status
+
+  perf:
+    monitor:
+      elapse:
+        time:
+          enable: true
+          package:
+            includes: com.m2e.dashboard.repository
+            excludes: com.m2e.dashboard.service.ESBClientService
+
+############################################################
+# DEV
+############################################################
+---
+spring:
+  config:
+    import:
+      - file:/app/cfo-dev/properties/mq.properties
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:oracle:thin:@10.170.119.163:1522:RCMSCTSDBDEV
+    username: ENC(uSrBzJxfHc/zANfJqQ0g+OnFtcJMI8rqQtPtfPSsjkv3/UGR+FMHDFlgXKn0JMWz)
+    password: ENC(uSrBzJxfHc/zANfJqQ0g+OnFtcJMI8rqQtPtfPSsjkv3/UGR+FMHDFlgXKn0JMWz)
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+
+  data:
+    redis:
+      host: 10.235.83.32
+      port: 6379
+      password: M@ybank2025!
+
+server:
+  port: 7015
+
+swag:
+  env: DEV
+  gateway-url: https://172.31.196.39:7013/cfo/dashboard
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: ${EUREKA_URI:http://localhost:7012/eureka}
+
+logger:
+  path: /app/cfo-dev/Dashboard/logs
+
+############################################################
+# SIT
+############################################################
+---
+spring:
+  config:
+    activate:
+      on-profile: sit
+
+swag:
+  env: SIT
+  gateway-url: https://172.31.196.39:9013/cfo/dashboard
+
+############################################################
+# UAT
+############################################################
+---
+spring:
+  config:
+    activate:
+      on-profile: uat
+
+swag:
+  env: UAT
+  gateway-url: https://172.31.196.40:9013/cfo/dashboard
+
+############################################################
+# PROD
+############################################################
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+swag:
+  env: PROD
+  gateway-url: https://xxx.xx.xxx.xx:xxxx/cfo/dashboard
+
+springdoc:
+  swagger-ui:
+    enabled: false
+
+############################################################
+# MANAGEMENT
+############################################################
+---
+management:
+  tracing:
+    enabled: true
+    sampler:
+      probability: 1.0
+
+spring:
+  reactor:
+    context-propagation: AUTO
+############################################################
+# LOCAL
+############################################################
+---
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  cache:
+    type: redis
+
+  datasource:
+    url: jdbc:oracle:thin:@10.235.84.41:1771:SSO
+    username: SSOPORTAL
+    password: P0rt4l#m2e
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+
+  data:
+    redis:
+      host: 10.235.83.32
+      port: 6379
+      password: M@ybank2025!
+
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.Oracle12cDialect
+        jdbc:
+          batch_size: 500
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+  cloud:
+    discovery:
+      enabled: false
+
+jasypt:
+  encryptor:
+    password: local
+
+m2e:
+  implementation: local
+
+  # SFTP Configuration for LOCAL
+  sftp:
+    host: 10.230.81.142
+    port: 22
+    username: m2e_trade
+    password: MaybankWinner1!
+    remote-directory: /XCOMDATA/M2ETRADE/Convergence
+    file-name: EDW_TRADE.TXT
+    local-temp-directory: C:/temp/sftp-files
+    polling-interval: 300000
+
+  integration:
+    notificationProcessing:
+      url: http://localhost/dummy
+      uri: http://localhost/dummy
+    eim:
+      enabled: false  # MATIKAN EIM untuk local
+
+cfo:
+  app:
+    jwtSecret: 12345678901234567890123456789012
+
+eureka:
+  client:
+    enabled: false
+
+logger:
+  path: C:/app/cfo/Dashboard/logs
+
+integration:
+  bts-url: http://10.230.83.144:10003/bts
+  esb-account-url: http://10.235.66.96:8800/id/mbi
+
+rate:
+  api:
+    url: https://erate-dev.maybank.co.id:8668
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    doc-expansion: none
+    tagsSorter: alpha

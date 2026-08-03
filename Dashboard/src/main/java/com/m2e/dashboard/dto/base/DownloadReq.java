@@ -2,25 +2,6 @@ package com.m2e.dashboard.dto.base;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.m2e.dashboard.dto.af.request.bd.download.AFBDAcctListDownloadReqDTO;
-import com.m2e.dashboard.dto.af.request.bd.download.AFBDSubAcctListDownloadReqDTO;
-import com.m2e.dashboard.dto.af.request.bd.download.AFBDTrxHistoryDownloadReqDTO;
-import com.m2e.dashboard.dto.af.request.fs.download.AFFSAcctListDownloadReqDTO;
-import com.m2e.dashboard.dto.af.request.fs.download.AFFSSubAcctListDownloadReqDTO;
-import com.m2e.dashboard.dto.af.request.fs.download.AFFSTrxHistDownloadReqDTO;
-import com.m2e.dashboard.dto.af.request.hp.download.AFHPAcctListDownloadReq;
-import com.m2e.dashboard.dto.af.request.hp.download.AFHPTrxHistDownloadReq;
-import com.m2e.dashboard.dto.af.request.pbr.download.AFPBRAccountListingDownloadReq;
-import com.m2e.dashboard.dto.af.request.pbr.download.AFPBRSubaccountListingDownloadReq;
-import com.m2e.dashboard.dto.af.request.pbr.download.AFPBRTrxHistoryDownloadReq;
-import com.m2e.dashboard.dto.card.charge.request.CCChargeCardListDLReqDTO;
-import com.m2e.dashboard.dto.card.charge.request.CCChargeCardPendHistDLReqDTO;
-import com.m2e.dashboard.dto.card.charge.request.CCChargeCardTrxHistDLReqDTO;
-import com.m2e.dashboard.dto.card.credit.request.CCCreditCardListDLReqDTO;
-import com.m2e.dashboard.dto.card.credit.request.CCCreditCardMasterListDLReqDTO;
-import com.m2e.dashboard.dto.card.credit.request.CCCreditCardPendHistDLReqDTO;
-import com.m2e.dashboard.dto.card.credit.request.CCCreditCardTrxHistDLReqDTO;
-import com.m2e.dashboard.dto.card.debit.request.CCDebitCardListDLReqDTO;
 import com.m2e.dashboard.dto.deposit.ca.request.download.*;
 import com.m2e.dashboard.dto.deposit.fd.request.download.DepositFDAccountListingDownloadReqDTO;
 import com.m2e.dashboard.dto.deposit.fd.request.download.DepositFDCertificateListingDownloadReqDTO;
@@ -28,9 +9,6 @@ import com.m2e.dashboard.dto.deposit.fd.request.download.DepositFDTrxHistoryDown
 import com.m2e.dashboard.dto.deposit.va.request.DepositVADownloadReqDTO;
 import com.m2e.dashboard.dto.deposit.va.request.DepositVATransHistDownloadReqDTO;
 import com.m2e.dashboard.dto.einvoice.request.EInvoiceListingDownloadReqDTO;
-import com.m2e.dashboard.dto.investment.request.INVUnitTrustAccDownloadReqDTO;
-import com.m2e.dashboard.dto.investment.request.INVUnitTrustFundDownloadReqDTO;
-import com.m2e.dashboard.dto.investment.request.INVUnitTrustHistDownloadReqDTO;
 import com.m2e.dashboard.dto.loan.overdraft.request.LNOverdraftAcctListingDownloadReqDTO;
 import com.m2e.dashboard.dto.loan.rc.request.download.LNRevolvingCreditAcctListingDownloadReqDTO;
 import com.m2e.dashboard.dto.loan.rc.request.download.LNRevolvingCreditTrxHistoryDownloadReqDTO;
@@ -75,32 +53,32 @@ import lombok.experimental.SuperBuilder;
         @JsonSubTypes.Type(value = DepositVADownloadReqDTO.class, name = "DEPOSIT_VA_ACCOUNTLISTING_RPT_TYPE"),
         @JsonSubTypes.Type(value = DepositVADownloadReqDTO.class, name = "DEPOSIT_LINKED_VA_ACCOUNT_LISTING_RPT_TYPE"),
         @JsonSubTypes.Type(value = DepositVATransHistDownloadReqDTO.class, name = "DEPOSIT_VA_TRXHISTORIES_RPT_TYPE"),
-        //Investment
-        @JsonSubTypes.Type(value = INVUnitTrustAccDownloadReqDTO.class, name = "UNIT_TRUST_ACCOUNTLISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = INVUnitTrustFundDownloadReqDTO.class, name = "UNIT_TRUST_FUND_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = INVUnitTrustHistDownloadReqDTO.class, name = "UNIT_TRUST_TRXHISTORIES_RPT_TYPE"),
-        //Auto Finance
-        @JsonSubTypes.Type(value = AFHPAcctListDownloadReq.class, name = "AF_HP_ACCOUNT_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFHPTrxHistDownloadReq.class, name = "AF_HP_TRX_HISTORY_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFFSAcctListDownloadReqDTO.class, name = "AF_FS_ACCOUNT_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFFSSubAcctListDownloadReqDTO.class, name = "AF_FS_SUB_ACCOUNT_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFFSTrxHistDownloadReqDTO.class, name = "AF_FS_TRX_HISTORY_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFBDAcctListDownloadReqDTO.class, name = "AF_BD_ACCOUNT_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFBDSubAcctListDownloadReqDTO.class, name = "AF_BD_SUB_ACCOUNT_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFBDTrxHistoryDownloadReqDTO.class, name = "AF_BD_TRX_HISTORY_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFPBRAccountListingDownloadReq.class, name = "AF_PBR_ACCLISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFPBRSubaccountListingDownloadReq.class, name = "AF_PBR_SUBACCLISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = AFPBRTrxHistoryDownloadReq.class, name = "AF_PBR_TRXHISTORIES_RPT_TYPE"),
-        //Credit Card
-        @JsonSubTypes.Type(value = CCCreditCardListDLReqDTO.class, name = "CREDIT_CARD_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCCreditCardTrxHistDLReqDTO.class, name = "CREDIT_CARD_TRXHISTORIES_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCCreditCardPendHistDLReqDTO.class, name = "CREDIT_CARD_PENDING_TRX_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCCreditCardMasterListDLReqDTO.class, name = "CREDIT_CARD_MASTER_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCChargeCardListDLReqDTO.class, name = "CHARGE_CARD_LISTING_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCChargeCardTrxHistDLReqDTO.class, name = "CHARGE_CARD_TRXHISTORIES_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCChargeCardPendHistDLReqDTO.class, name = "CHARGE_CARD_PENDING_TRX_RPT_TYPE"),
-        @JsonSubTypes.Type(value = CCDebitCardListDLReqDTO.class, name = "DEBIT_CARD_LISTING_RPT_TYPE"),
-        //Trade
+//        //Investment
+//        @JsonSubTypes.Type(value = INVUnitTrustAccDownloadReqDTO.class, name = "UNIT_TRUST_ACCOUNTLISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = INVUnitTrustFundDownloadReqDTO.class, name = "UNIT_TRUST_FUND_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = INVUnitTrustHistDownloadReqDTO.class, name = "UNIT_TRUST_TRXHISTORIES_RPT_TYPE"),
+//        //Auto Finance
+//        @JsonSubTypes.Type(value = AFHPAcctListDownloadReq.class, name = "AF_HP_ACCOUNT_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFHPTrxHistDownloadReq.class, name = "AF_HP_TRX_HISTORY_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFFSAcctListDownloadReqDTO.class, name = "AF_FS_ACCOUNT_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFFSSubAcctListDownloadReqDTO.class, name = "AF_FS_SUB_ACCOUNT_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFFSTrxHistDownloadReqDTO.class, name = "AF_FS_TRX_HISTORY_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFBDAcctListDownloadReqDTO.class, name = "AF_BD_ACCOUNT_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFBDSubAcctListDownloadReqDTO.class, name = "AF_BD_SUB_ACCOUNT_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFBDTrxHistoryDownloadReqDTO.class, name = "AF_BD_TRX_HISTORY_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFPBRAccountListingDownloadReq.class, name = "AF_PBR_ACCLISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFPBRSubaccountListingDownloadReq.class, name = "AF_PBR_SUBACCLISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = AFPBRTrxHistoryDownloadReq.class, name = "AF_PBR_TRXHISTORIES_RPT_TYPE"),
+//        //Credit Card
+//        @JsonSubTypes.Type(value = CCCreditCardListDLReqDTO.class, name = "CREDIT_CARD_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCCreditCardTrxHistDLReqDTO.class, name = "CREDIT_CARD_TRXHISTORIES_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCCreditCardPendHistDLReqDTO.class, name = "CREDIT_CARD_PENDING_TRX_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCCreditCardMasterListDLReqDTO.class, name = "CREDIT_CARD_MASTER_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCChargeCardListDLReqDTO.class, name = "CHARGE_CARD_LISTING_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCChargeCardTrxHistDLReqDTO.class, name = "CHARGE_CARD_TRXHISTORIES_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCChargeCardPendHistDLReqDTO.class, name = "CHARGE_CARD_PENDING_TRX_RPT_TYPE"),
+//        @JsonSubTypes.Type(value = CCDebitCardListDLReqDTO.class, name = "DEBIT_CARD_LISTING_RPT_TYPE"),
+//        //Trade
         @JsonSubTypes.Type(value = TradeAccountListingDownloadReqDTO.class, name = "TRADE_ACCOUNTLISTING_RPT_TYPE"),
         //Other Bank
         @JsonSubTypes.Type(value = OtherBankDepositAcctListingDownloadReqDTO.class, name = "OTHER_BANK_DEPOSIT_ACCOUNT_LISTING_RPT_TYPE"),
@@ -118,13 +96,13 @@ import lombok.experimental.SuperBuilder;
         @JsonSubTypes.Type(value = OverviewDownloadReqDTO.class, name = "OVERVIEW_LISTING_RPT_TYPE"),
         @JsonSubTypes.Type(value = EInvoiceListingDownloadReqDTO.class, name = "EINVOICE_LISTING_RPT_TYPE"),
 })
-@Schema(
-        description = "Base request for downloading files",
-        discriminatorProperty = "type",
-        discriminatorMapping = {
-                @DiscriminatorMapping(value = "AFHPTrxHistDownloadReq", schema = AFHPTrxHistDownloadReq.class)
-        }
-)
+//@Schema(
+//        description = "Base request for downloading files",
+//        discriminatorProperty = "type",
+//        discriminatorMapping = {
+//                @DiscriminatorMapping(value = "AFHPTrxHistDownloadReq", schema = AFHPTrxHistDownloadReq.class)
+//        }
+//)
 public class DownloadReq {
     private ReportFormat format;
     private ReportType reportType;

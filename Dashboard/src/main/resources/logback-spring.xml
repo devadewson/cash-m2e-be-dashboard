@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="SPRING_APPLICATION_NAME" source="spring.application.name" />
+    <springProperty scope="context" name="SPRING_ACTIVE_PROFILE" source="spring.profiles.active" />
+    <springProperty scope="context" name="LOGS" source="logger.path" />
+    <springProperty scope="context" name="LOGSTASH_HOST" source="logstash.host"/>
+    <property name="LOG_PATTERN" value="[%date] [%level] [%thread] [%logger{10}] [%mdc] %msg%n%throwable"/>
+    <!-- Default log retention -->
+    <property name="MAX_HISTORY" value="7"/>
+    <!-- PROD override -->
+    <springProfile name="prod">
+        <property name="MAX_HISTORY" value="90"/>
+    </springProfile>
+
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="applicationLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/app.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/app-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="hostLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/host.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/hostLog-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="databaseLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/database.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/database-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="spLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/sp.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/spLog-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <appender name="hikariLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOGS}/hikari.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOGS}/archived/hikariLog-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>${MAX_HISTORY}</maxHistory>
+        </rollingPolicy>
+    </appender>
+
+    <!-- LOGSTASH APPENDER (INFO+) -->
+    <appender name="logstashSync" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST}</destination>
+        <connectionTimeout>10000</connectionTimeout>
+        <writeTimeout>10000</writeTimeout>
+        <reconnectionDelay>5000</reconnectionDelay>
+        <queueSize>256</queueSize>
+        <ringBufferSize>1024</ringBufferSize>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <includeCallerData>true</includeCallerData>
+            <customFields>
+                {
+                "data_stream": {
+                "type": "logs",
+                "dataset": "convergence",
+                "namespace": "${SPRING_ACTIVE_PROFILE}"
+                },
+                "app_name":"${SPRING_APPLICATION_NAME}"
+                }
+            </customFields>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <!-- Async wrapper to avoid blocking application threads -->
+    <appender name="logstash" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="logstashSync"/>
+        <queueSize>8192</queueSize>
+        <!-- 0 => do not discard even when queue is near full -->
+        <discardingThreshold>0</discardingThreshold>
+        <!-- If queue fills, drop events instead of blocking app threads -->
+        <neverBlock>true</neverBlock>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="console" />
+        <appender-ref ref="applicationLog" />
+        <appender-ref ref="logstash"/>
+    </root>
+
+    <logger name="com.m2e.dashboard" level="INFO" additivity="false">
+        <appender-ref ref="applicationLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="org.springframework.web" level="INFO" additivity="false">
+        <appender-ref ref="console" />
+        <appender-ref ref="applicationLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="com.m2e.dashboard.config.jms" level="INFO" additivity="false">
+        <appender-ref ref="hostLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="com.m2e.dashboard.service.esb.client" level="INFO" additivity="false">
+        <appender-ref ref="hostLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="com.m2e.dashboard.service.esb.ESBClientService" level="INFO" additivity="false">
+        <appender-ref ref="hostLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="org.hibernate" level="INFO" additivity="false">
+        <appender-ref ref="databaseLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="com.m2e.utils.jdbc.utils.SpLogUtil" level="INFO" additivity="false">
+        <appender-ref ref="spLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="com.zaxxer" level="INFO" additivity="false">
+        <appender-ref ref="hikariLog" />
+        <appender-ref ref="logstash"/>
+    </logger>
+
+    <logger name="com.zaxxer.hikari.HikariConfig" level="INFO"/>
+    <logger name="com.zaxxer.hikari.pool.HikariPool" level="INFO"/>
+    <logger name="org.hibernate.stat.Statistics" level="INFO"/>
+    <logger name="org.hibernate.SQL" level="INFO"/>
+
+    <!-- Silence noisy connection failures from the Logstash appender itself -->
+    <logger name="net.logstash.logback.appender.LogstashTcpSocketAppender" level="OFF" additivity="false"/>
+    <logger name="net.logstash.logback.encoder" level="ERROR" additivity="false"/>
+    <logger name="com.netflix.discovery.shared.resolver.aws.ConfigClusterResolver" level="WARN"/>
+</configuration>

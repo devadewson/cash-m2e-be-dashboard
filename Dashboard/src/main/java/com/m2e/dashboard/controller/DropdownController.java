@@ -4,8 +4,6 @@ import com.m2e.dashboard.auth.JwtUtil;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.OpenTagCorpPageDTO;
 import com.m2e.dashboard.dto.base.OpenTagCorpPageReqDTO;
-import com.m2e.dashboard.dto.card.credit.request.CCCreditCardMemberDropDownReqDTO;
-import com.m2e.dashboard.dto.card.credit.response.CCCreditCardMemberDTO;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.company.CorpDropdownReqDTO;
 import com.m2e.dashboard.dto.deposit.ca.response.SubscriberCorpLinkDTO;
@@ -21,7 +19,7 @@ import com.m2e.dashboard.dto.maintenance.response.SubProductDTO;
 import com.m2e.dashboard.enums.CreditCardType;
 import com.m2e.dashboard.enums.ErrorMessageEnum;
 import com.m2e.dashboard.service.DropdownService;
-import com.m2e.dashboard.service.card.credit.CCCreditCardService;
+
 import com.m2e.dashboard.service.company.CorpService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -53,7 +51,7 @@ public class DropdownController {
 
     private final CorpService corpService;
 
-    private final CCCreditCardService creditCardService;
+//    private final CCCreditCardService creditCardService;
 
     private final DropdownService dropdownService;
 
@@ -123,18 +121,18 @@ public class DropdownController {
         }
     }
 
-    @Operation(
-            summary = "[MOCK DATA] Get list of card member"
-    )
-    @PostMapping("credit-card-member")
-    public ResponseEntity<com.m2e.dashboard.dto.common.ApiResponse<List<CCCreditCardMemberDTO>>> getCardMemberList(@RequestHeader(HttpHeaders.AUTHORIZATION) String auth, @RequestBody CCCreditCardMemberDropDownReqDTO request) {
-        try {
-            return ResponseEntity.ok(creditCardService.getCardMemberDropDownList(request));
-        } catch (Exception e) {
-            logger.error(e.getMessage(), e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, ErrorMessageEnum.MSG_ERROR.getDescription());
-        }
-    }
+//    @Operation(
+//            summary = "[MOCK DATA] Get list of card member"
+//    )
+////    @PostMapping("credit-card-member")
+////    public ResponseEntity<com.m2e.dashboard.dto.common.ApiResponse<List<CCCreditCardMemberDTO>>> getCardMemberList(@RequestHeader(HttpHeaders.AUTHORIZATION) String auth, @RequestBody CCCreditCardMemberDropDownReqDTO request) {
+////        try {
+////            return ResponseEntity.ok(creditCardService.getCardMemberDropDownList(request));
+////        } catch (Exception e) {
+////            logger.error(e.getMessage(), e);
+////            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, ErrorMessageEnum.MSG_ERROR.getDescription());
+////        }
+////    }
 
     @Operation(
             summary = "Credit Card Type"

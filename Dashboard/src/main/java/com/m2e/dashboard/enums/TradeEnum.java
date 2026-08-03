@@ -8,7 +8,15 @@ public enum TradeEnum {
     IMPORT("I", "IMPORT"),
     EXPORT("E", "EXPORT"),
     LOANS("L", "LOANS"),
-    GUARANTEE("G", "GUARANTEE"),
+    INCOMING_COLLECTION("IC", "Incoming Collection"),
+    OUTGOING_COLLECTION("OC", "Outgoing Collection"),
+    GUARANTEE_ADVISING("GA", "Guarantee Advising"),
+    EXPORT_LC_SKBDN_COLLECTION("ELSC", "Export LC/SKBDN Collection"),
+    EXPORT_LC_SKBDN_ADVISING("ELSA", "LC/SKBDN Advising"),
+    EXPORT_LC_SKBDN_NEGOTIATION("ELSN", "Export LC/SKBDN Negotiation"),
+    IMPORT_LC_SKBDN("ILS", "Import LC/SKBDN"),
+    GUARANTEE("G", "Guarantee/SBLC"),
+    TRADE_FINANCING("TF", "Trade Financing"),
     ALL("", "");
     private final String category;
     private final String acctType;

@@ -1,175 +1,193 @@
 package com.m2e.dashboard.service.trade;
 
 import com.m2e.dashboard.config.UserAndCorp;
-import com.m2e.dashboard.dto.base.*;
+import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.common.SearchCollectionResponse;
-import com.m2e.dashboard.dto.trade.request.TradeAcctListingReqDTO;
-import com.m2e.dashboard.dto.trade.request.TradeAcctStatsReqDTO;
-import com.m2e.dashboard.dto.trade.request.download.TradeAccountListingDownloadReqDTO;
-import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;
+import com.m2e.dashboard.dto.trade.DatamartListingProjection;
+import com.m2e.dashboard.dto.trade.TradeAcctStatsProjection;
 import com.m2e.dashboard.dto.trade.response.TradeAcctListingDTO;
-import com.m2e.dashboard.enums.DownloadEnum;
+import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;
 import com.m2e.dashboard.enums.TradeEnum;
+import com.m2e.dashboard.repository.DatamartAgreementRepository;
 import com.m2e.dashboard.sp.trade.response.TradeAcctListingSpDTO;
-import com.m2e.utils.jdbc.model.dto.BaseSpDto;
-import com.m2e.utils.jdbc.service.BaseSpService;
-import com.m2e.utils.redis.helper.RedisHelper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
-import static com.m2e.dashboard.enums.AcctRedisKeyEnum.BD_AM_TD_ACCTLIST;
-import static com.m2e.dashboard.enums.SPEnum.*;
-
-@Slf4j
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class TradeService {
 
-    @Autowired
-    private BaseSpService baseSpService;
+    private final DatamartAgreementRepository datamartAgreementRepository;
 
-    @Autowired
-    private TradeFileService fileService;
-    @Autowired
-    private ModelMapper modelMapper;
-    @Autowired
-    private RedisHelper redisHelper;
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    public ApiResponse<TradeAcctStatsDTO> getTradeAccountStatsSp(UserAndCorp userAndCorp, TradeEnum tradeEnum) {
-        removeAllFromCache(userAndCorp);
+    private static final String STATS_CACHE_NAME = "tradeAcctStats";
+    private static final String LISTING_CACHE_NAME = "tradeAcctListing";
 
-        TradeAcctStatsReqDTO tradeAcctStatsReqDTO = new TradeAcctStatsReqDTO();
-        tradeAcctStatsReqDTO.setCorpId(userAndCorp.getCorpId());
-        tradeAcctStatsReqDTO.setUserId(userAndCorp.getUserId());
-        tradeAcctStatsReqDTO.setTradeCategory(tradeEnum.getCategory());
-        tradeAcctStatsReqDTO.setAcctType(tradeEnum.getAcctType());
+    // ================= Account Stats =================
 
-        BaseSpDto<TradeAcctStatsReqDTO, TradeAcctStatsDTO> baseSpDto = new BaseSpDto<>();
-        baseSpDto.setSpId(SP_TD_ACCT_STATS.getValue());
-        baseSpDto.setParameter(tradeAcctStatsReqDTO);
-        baseSpDto.setResultClass(TradeAcctStatsDTO.class);
-        List<TradeAcctStatsDTO> results = Optional.ofNullable(baseSpService.execute(baseSpDto))
-                .map(BaseSpDto::getResults)
-                .orElse(Collections.emptyList());
-        TradeAcctStatsDTO tradeAcctStatsDTO = results.stream().findFirst().orElse(null);
+    @Cacheable(
+            value = STATS_CACHE_NAME,
+            key = "#userAndCorp.corpId + '_' + #tradeEnum.acctType + '_' + T(java.time.LocalDate).now()",
+            unless = "#result == null || #result.msgBody == null"
+    )
+    public ApiResponse<TradeAcctStatsDTO> getTradeAccountStats(UserAndCorp userAndCorp, TradeEnum tradeEnum) {
+        long start = System.currentTimeMillis();
+        String corpId = userAndCorp.getCorpId();
+        String acctType = tradeEnum.getAcctType();
 
-        ApiResponse<TradeAcctStatsDTO> apiResponse = new ApiResponse<>();
-        apiResponse.setMsgBody(tradeAcctStatsDTO);
-        apiResponse.setMsgHeader(new ErrorResponse("0"));
-        return apiResponse;
+        LocalDate today = LocalDate.now();
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+
+        log.info("[TradeAcctStats] START corpId={}, acctType={}, filterDate={}", corpId, acctType, today);
+
+        try {
+            TradeAcctStatsProjection result =
+                    datamartAgreementRepository.getAccountStats(corpId, acctType, startOfDay, endOfDay);
+
+            long noOfAccounts = (result != null && result.getNoOfAccounts() != null)
+                    ? result.getNoOfAccounts() : 0L;
+            BigDecimal totalOutstandingBal = (result != null && result.getTotalOutstandingBal() != null)
+                    ? result.getTotalOutstandingBal() : BigDecimal.ZERO;
+
+            LocalDateTime now = LocalDateTime.now();
+
+            TradeAcctStatsDTO dto = new TradeAcctStatsDTO();
+            dto.setNoOfAccounts(String.valueOf(noOfAccounts));
+            dto.setTotalOutstandingBal(totalOutstandingBal.setScale(2, RoundingMode.HALF_UP).toPlainString());
+            dto.setLastUpdatedDate(now.format(DATE_FMT));
+            dto.setLastUpdatedDateTime(now.format(DATETIME_FMT));
+
+            long durationMs = System.currentTimeMillis() - start;
+            log.info("[TradeAcctStats] SUCCESS corpId={}, acctType={}, noOfAccounts={}, totalOutstandingBal={}, durationMs={}",
+                    corpId, acctType, dto.getNoOfAccounts(), dto.getTotalOutstandingBal(), durationMs);
+
+            ApiResponse<TradeAcctStatsDTO> apiResponse = new ApiResponse<>();
+            apiResponse.setMsgBody(dto);
+            apiResponse.setMsgHeader(new ErrorResponse("0"));
+            return apiResponse;
+
+        } catch (Exception e) {
+            long durationMs = System.currentTimeMillis() - start;
+            log.error("[TradeAcctStats] FAILED corpId={}, acctType={}, durationMs={}, error={}",
+                    corpId, acctType, durationMs, e.getMessage(), e);
+
+            ApiResponse<TradeAcctStatsDTO> apiResponse = new ApiResponse<>();
+            apiResponse.setMsgBody(null);
+            apiResponse.setMsgHeader(new ErrorResponse("1"));
+            return apiResponse;
+        }
     }
 
-    public ApiResponse<TradeAcctListingDTO> getTradeAccountListingSp(UserAndCorp userAndCorp, AccountListReq req, TradeEnum tradeEnum) {
+    @CacheEvict(value = STATS_CACHE_NAME, allEntries = true)
+    public void evictAllTradeAcctStatsCache() {
+        log.info("[TradeAcctStats] All cache entries evicted for {}", STATS_CACHE_NAME);
+    }
+
+    // ================= Account List =================
+
+    @Cacheable(
+            value = LISTING_CACHE_NAME,
+            key = "(T(org.springframework.util.StringUtils).hasText(#req.openTaggedCorpId) ? #req.openTaggedCorpId : #userAndCorp.corpId)"
+                    + " + '_' + #tradeEnum.acctType + '_' + #req.page + '_' + #req.pageSize + '_' + T(java.time.LocalDate).now()",
+            unless = "#result == null || #result.msgBody == null"
+    )
+    public ApiResponse<TradeAcctListingDTO> getTradeAccountListing(UserAndCorp userAndCorp, AccountListReq req, TradeEnum tradeEnum) {
+        long start = System.currentTimeMillis();
         ApiResponse<TradeAcctListingDTO> apiResponse = new ApiResponse<>();
-        ApiResponse<TradeAcctListingDTO> finalResp = getAcctFromCache(userAndCorp, req);
 
-        if (finalResp == null) {
-            TradeAcctListingReqDTO tradeAcctListingReqDTO = new TradeAcctListingReqDTO();
-            tradeAcctListingReqDTO.setUserId(userAndCorp.getUserId());
-            //use open tag corpId if exists, else use corpId from token
-            String corpId = StringUtils.hasText(req.getOpenTaggedCorpId()) ? req.getOpenTaggedCorpId() : userAndCorp.getCorpId();
-            tradeAcctListingReqDTO.setCorpId(corpId);
-            tradeAcctListingReqDTO.setCorpCifNo(req.getCorpCifNo());
-            tradeAcctListingReqDTO.setSearchKey(StringUtils.hasText(req.getSearchParam()) ? req.getSearchParam() : null);
-            tradeAcctListingReqDTO.setTradeCategory(tradeEnum.getCategory());
-            tradeAcctListingReqDTO.setAcctType(tradeEnum.getAcctType());
-            tradeAcctListingReqDTO.setPageSize(req.getPageSize());
-            tradeAcctListingReqDTO.setPage(req.getPage());
+        String corpId = StringUtils.hasText(req.getOpenTaggedCorpId()) ? req.getOpenTaggedCorpId() : userAndCorp.getCorpId();
+        String acctType = tradeEnum.getAcctType();
 
-            BaseSpDto<TradeAcctListingReqDTO, TradeAcctListingSpDTO> baseSpDto = new BaseSpDto<>();
-            baseSpDto.setSpId(SP_TD_ACCT_LIST.getValue());
-            baseSpDto.setParameter(tradeAcctListingReqDTO);
-            baseSpDto.setPageSize(tradeAcctListingReqDTO.getPageSize());
-            baseSpDto.setPageNumber(tradeAcctListingReqDTO.getPage());
-            baseSpDto.setResultClass(TradeAcctListingSpDTO.class);
-            BaseSpDto<TradeAcctListingReqDTO, TradeAcctListingSpDTO> resultBaseSpDto = baseSpService.execute(baseSpDto);
-            List<TradeAcctListingSpDTO> spResultList = Optional.ofNullable(resultBaseSpDto)
-                    .map(BaseSpDto::getResults)
-                    .orElse(Collections.emptyList());
-            SearchCollectionResponse<TradeAcctListingSpDTO> result = new SearchCollectionResponse<>();
+        log.info("[TradeAcctListing] START corpId={}, acctType={}, page={}, pageSize={}",
+                corpId, acctType, req.getPage(), req.getPageSize());
 
-            int totalPage = Optional.ofNullable(resultBaseSpDto).map(BaseSpDto::getTotalPage).orElse(0);
-            int totalRecordCount = Optional.ofNullable(resultBaseSpDto).map(BaseSpDto::getTotalRecord).orElse(0);
+        try {
+            LocalDate today = LocalDate.now();
+            LocalDateTime startOfDay = today.atStartOfDay();
+            LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
 
-            result.setNextPage(tradeAcctListingReqDTO.getPage() >= totalPage ? totalPage : tradeAcctListingReqDTO.getPage() + 1);
-            result.setCurrentPage(tradeAcctListingReqDTO.getPage());
-            result.setTotalPages(totalPage);
-            result.setTotalRecordCount(totalRecordCount);
-            result.setData(spResultList);
+            Pageable pageable = PageRequest.of(req.getPage(), req.getPageSize());
 
-            TradeAcctListingDTO tradeAcctListingDTO = new TradeAcctListingDTO();
-            tradeAcctListingDTO.setCorpCifNo(req.getCorpCifNo());
-            tradeAcctListingDTO.setDatas(result);
+            Page<DatamartListingProjection> resultPage = datamartAgreementRepository.getAccountListing(
+                    corpId, acctType, startOfDay, endOfDay, pageable
+            );
+
+            Page<TradeAcctListingSpDTO> mappedPage = resultPage.map(this::toListingDto);
+
+            SearchCollectionResponse<TradeAcctListingSpDTO> result = new SearchCollectionResponse<>(mappedPage);
+
+            TradeAcctListingDTO dto = new TradeAcctListingDTO();
+            dto.setCorpCifNo(req.getCorpCifNo());
+            dto.setDatas(result);
 
             apiResponse.setMsgHeader(new ErrorResponse("0"));
-            apiResponse.setMsgBody(tradeAcctListingDTO);
+            apiResponse.setMsgBody(dto);
 
-            finalResp = apiResponse;
-            redisHelper.save(getRedisKey(userAndCorp, req), finalResp);
+            long durationMs = System.currentTimeMillis() - start;
+            log.info("[TradeAcctListing] SUCCESS corpId={}, acctType={}, page={}, totalRecords={}, durationMs={}",
+                    corpId, acctType, req.getPage(), result.getTotalRecordCount(), durationMs);
+
+            return apiResponse;
+
+        } catch (Exception e) {
+            long durationMs = System.currentTimeMillis() - start;
+            log.error("[TradeAcctListing] FAILED corpId={}, acctType={}, durationMs={}, error={}",
+                    corpId, acctType, durationMs, e.getMessage(), e);
+
+            apiResponse.setMsgHeader(new ErrorResponse("1"));
+            apiResponse.setMsgBody(null);
+            return apiResponse;
         }
-
-        return finalResp;
     }
 
-    public DownloadDTO downloadTrade(UserAndCorp userAndCorp, TradeAccountListingDownloadReqDTO req, TradeEnum tradeEnum){
-        DownloadDTO result = new DownloadDTO();
-        TradeAcctListingReqDTO tradeAcctSummaryReq = new TradeAcctListingReqDTO();
-        tradeAcctSummaryReq.setUserId(userAndCorp.getUserId());
-        tradeAcctSummaryReq.setCorpId(userAndCorp.getCorpId());
-        tradeAcctSummaryReq.setCorpCifNo(StringUtils.hasText(req.getCorpCifNo()) ? req.getCorpCifNo() : null);
-        tradeAcctSummaryReq.setTradeCategory(tradeEnum.getCategory());
-        tradeAcctSummaryReq.setAcctType(tradeEnum.getAcctType());
-        tradeAcctSummaryReq.setPageSize(1);
-        tradeAcctSummaryReq.setPage(Integer.MAX_VALUE);
-
-        BaseSpDto<TradeAcctListingReqDTO, TradeAcctListingSpDTO> baseSpDto = new BaseSpDto<>();
-        baseSpDto.setSpId(SP_TD_ACCT_LIST.getValue());
-        baseSpDto.setParameter(tradeAcctSummaryReq);
-        baseSpDto.setPageNumber(1);
-        baseSpDto.setPageSize(Integer.MAX_VALUE);
-        baseSpDto.setResultClass(TradeAcctListingSpDTO.class);
-        BaseSpDto<TradeAcctListingReqDTO, TradeAcctListingSpDTO> resultBaseSpDto = baseSpService.execute(baseSpDto);
-        List<TradeAcctListingSpDTO> spResultList = Optional.ofNullable(resultBaseSpDto)
-                .map(BaseSpDto::getResults)
-                .orElse(Collections.emptyList());
-        switch (req.getFormat()) {
-            case CSV:
-                result.setData(fileService.generateCsv(spResultList));
-                result.setFileName(DownloadEnum.TRADE_IMPORT_ACCLISTING_FILENAME.getDescription() + tradeEnum.getAcctType() + "_" + System.currentTimeMillis() + ".csv");
-                break;
-            case PDF:
-                result.setData(fileService.generatePdf(spResultList));
-                result.setFileName(DownloadEnum.TRADE_IMPORT_ACCLISTING_FILENAME.getDescription() + tradeEnum.getAcctType() + "_" + System.currentTimeMillis() + ".pdf");
-                break;
-            case TXT:
-                result.setData(fileService.generateTxt(spResultList));
-                result.setFileName(DownloadEnum.TRADE_IMPORT_ACCLISTING_FILENAME.getDescription() + tradeEnum.getAcctType() + "_" + System.currentTimeMillis() + ".txt");
-                break;
-            default:
-                throw new IllegalArgumentException("Report format is undefined");
-        }
-        return result;
+    @CacheEvict(value = LISTING_CACHE_NAME, allEntries = true)
+    public void evictAllTradeAcctListingCache() {
+        log.info("[TradeAcctListing] All cache entries evicted for {}", LISTING_CACHE_NAME);
     }
 
-    public void removeAllFromCache(UserAndCorp userAndCorp){
-        String redisKey = redisHelper.createCacheKey(BD_AM_TD_ACCTLIST, userAndCorp.getUserId() + "_" + userAndCorp.getCorpId() + "_*");
-        redisHelper.deleteCachesWithPattern(redisKey);
-        log.info("removed cache for {}", redisKey);
-    }
-    private ApiResponse<TradeAcctListingDTO> getAcctFromCache(UserAndCorp userAndCorp, AccountListReq reqDTO) {
-        return (ApiResponse<TradeAcctListingDTO>) redisHelper.getFromCache(getRedisKey(userAndCorp, reqDTO), ApiResponse.class);
-    }
-
-    private String getRedisKey(UserAndCorp userAndCorp, AccountListReq reqDTO) {
-        String redisKey = redisHelper.createCacheKey(BD_AM_TD_ACCTLIST, userAndCorp.getUserId() + "_" + userAndCorp.getCorpId() + "_" + "HIS" + "_" + reqDTO.getCorpCifNo() + "_" + reqDTO.getPage() + "_" + reqDTO.getPageSize() + "_" + reqDTO.getSearchParam());
-        return redisKey;
+    private TradeAcctListingSpDTO toListingDto(DatamartListingProjection p) {
+        return TradeAcctListingSpDTO.builder()
+                .refNumber(p.getRefNo())
+                .facilityType(p.getProductType())
+                .currency(p.getCurrency())
+                .initialAmount(p.getInitialAmount() != null
+                        ? p.getInitialAmount().setScale(2, RoundingMode.HALF_UP).toPlainString()
+                        : "0.00")
+                .outstandingAmount(p.getOutstandingAmount() != null
+                        ? p.getOutstandingAmount().setScale(2, RoundingMode.HALF_UP).toPlainString()
+                        : "0.00")
+                .tenor(p.getTenor() != null ? String.valueOf(p.getTenor()) : null)
+                .releaseDate(p.getReleaseDate() != null
+                        ? java.sql.Timestamp.valueOf(p.getReleaseDate())
+                        : null)
+                .maturityDate(p.getMaturityDate() != null
+                        ? java.sql.Date.valueOf(p.getMaturityDate())
+                        : null)
+                .drawerName(p.getDrawer())
+                .remitingBank(p.getRemitingBank())
+                .beneficiaryName(p.getBeneficiary())
+                .applicantName(p.getApplicant())
+                .issuingBank(p.getIssuingBank())
+                .numberOfItems(null)
+                .build();
     }
 }

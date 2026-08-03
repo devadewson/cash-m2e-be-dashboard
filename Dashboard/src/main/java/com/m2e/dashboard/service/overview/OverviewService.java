@@ -149,64 +149,64 @@ public class OverviewService {
         return apiResponse;
     }
 
-    public void calculateTotals(AssetLiabilitiesResDTO dto) {
-        if (dto == null) return;
+        public void calculateTotals(AssetLiabilitiesResDTO dto) {
+            if (dto == null) return;
 
-        BigDecimal totalAsset = safeAdd(dto.getTotalCA())
-                .add(safeAdd(dto.getTotalFCA()))
-                .add(safeAdd(dto.getTotalMFCA()))
-                .add(safeAdd(dto.getTotalFD()))
-                .add(safeAdd(dto.getTotalTD()))
-                .add(safeAdd(dto.getTotalInv()))
-                .add(safeAdd(dto.getTotalDpOther()));
+            BigDecimal totalAsset = safeAdd(dto.getTotalCA())
+                    .add(safeAdd(dto.getTotalFCA()))
+                    .add(safeAdd(dto.getTotalMFCA()))
+                    .add(safeAdd(dto.getTotalFD()))
+                    .add(safeAdd(dto.getTotalTD()))
+                    .add(safeAdd(dto.getTotalInv()))
+                    .add(safeAdd(dto.getTotalDpOther()));
 
-        dto.setTotalAsset(totalAsset);
+            dto.setTotalAsset(totalAsset);
 
-        BigDecimal totalLiabilities = safeAdd(dto.getTotalHp())
-                .add(safeAdd(dto.getTotalBhp()))
-                .add(safeAdd(dto.getTotalBD()))
-                .add(safeAdd(dto.getTotalFs()))
-                .add(safeAdd(dto.getTotalTRD()))
-                .add(safeAdd(dto.getTotalTRDE()))
-                .add(safeAdd(dto.getTotalTRDI()))
-                .add(safeAdd(dto.getTotalTRDG()))
-                .add(safeAdd(dto.getTotalTRDL()))
-                .add(safeAdd(dto.getTotalTL()))
-                .add(safeAdd(dto.getTotalPbr()))
-                .add(safeAdd(dto.getTotalRc()))
-                .add(safeAdd(dto.getTotalOD()))
-                .add(safeAdd(dto.getTotalChc()))
-                .add(safeAdd(dto.getTotalCrc()))
-                .add(safeAdd(dto.getTotalDc()))
-                .add(safeAdd(dto.getTotalLoanOther()));
+            BigDecimal totalLiabilities = safeAdd(dto.getTotalHp())
+                    .add(safeAdd(dto.getTotalBhp()))
+                    .add(safeAdd(dto.getTotalBD()))
+                    .add(safeAdd(dto.getTotalFs()))
+                    .add(safeAdd(dto.getTotalTRD()))
+                    .add(safeAdd(dto.getTotalTRDE()))
+                    .add(safeAdd(dto.getTotalTRDI()))
+                    .add(safeAdd(dto.getTotalTRDG()))
+                    .add(safeAdd(dto.getTotalTRDL()))
+                    .add(safeAdd(dto.getTotalTL()))
+                    .add(safeAdd(dto.getTotalPbr()))
+                    .add(safeAdd(dto.getTotalRc()))
+                    .add(safeAdd(dto.getTotalOD()))
+                    .add(safeAdd(dto.getTotalChc()))
+                    .add(safeAdd(dto.getTotalCrc()))
+                    .add(safeAdd(dto.getTotalDc()))
+                    .add(safeAdd(dto.getTotalLoanOther()));
 
-        dto.setTotalLiabilities(totalLiabilities);
+            dto.setTotalLiabilities(totalLiabilities);
 
-        BigDecimal totalAssetRatios = safeAdd(dto.getTotalCA())
-                .add(safeAdd(dto.getTotalFCA()))
-                .add(safeAdd(dto.getTotalMFCA()))
-                .add(safeAdd(dto.getTotalInv()))
-                .add(safeAdd(dto.getTotalDpOther()));
-        dto.setTotalAssetRatio(totalAssetRatios);
+            BigDecimal totalAssetRatios = safeAdd(dto.getTotalCA())
+                    .add(safeAdd(dto.getTotalFCA()))
+                    .add(safeAdd(dto.getTotalMFCA()))
+                    .add(safeAdd(dto.getTotalInv()))
+                    .add(safeAdd(dto.getTotalDpOther()));
+            dto.setTotalAssetRatio(totalAssetRatios);
 
-        BigDecimal totalLiabilityRatios = safeAdd(dto.getTotalHp())
-                .add(safeAdd(dto.getTotalBhp()))
-                .add(safeAdd(dto.getTotalBD()))
-                .add(safeAdd(dto.getTotalFs()))
-                .add(safeAdd(dto.getTotalTRD()))
-                .add(safeAdd(dto.getTotalTRDE()))
-                .add(safeAdd(dto.getTotalTRDI()))
-                .add(safeAdd(dto.getTotalTRDG()))
-                .add(safeAdd(dto.getTotalTRDL()))
-                .add(safeAdd(dto.getTotalPbr()))
-                .add(safeAdd(dto.getTotalRc()))
-                .add(safeAdd(dto.getTotalOD()))
-                .add(safeAdd(dto.getTotalChc()))
-                .add(safeAdd(dto.getTotalCrc()))
-                .add(safeAdd(dto.getTotalDc()))
-                .add(safeAdd(dto.getTotalLoanOther()));
-        dto.setTotalLiabilitiesRatio(totalLiabilityRatios);
-    }
+            BigDecimal totalLiabilityRatios = safeAdd(dto.getTotalHp())
+                    .add(safeAdd(dto.getTotalBhp()))
+                    .add(safeAdd(dto.getTotalBD()))
+                    .add(safeAdd(dto.getTotalFs()))
+                    .add(safeAdd(dto.getTotalTRD()))
+                    .add(safeAdd(dto.getTotalTRDE()))
+                    .add(safeAdd(dto.getTotalTRDI()))
+                    .add(safeAdd(dto.getTotalTRDG()))
+                    .add(safeAdd(dto.getTotalTRDL()))
+                    .add(safeAdd(dto.getTotalPbr()))
+                    .add(safeAdd(dto.getTotalRc()))
+                    .add(safeAdd(dto.getTotalOD()))
+                    .add(safeAdd(dto.getTotalChc()))
+                    .add(safeAdd(dto.getTotalCrc()))
+                    .add(safeAdd(dto.getTotalDc()))
+                    .add(safeAdd(dto.getTotalLoanOther()));
+            dto.setTotalLiabilitiesRatio(totalLiabilityRatios);
+        }
 
     private BigDecimal safeAdd(BigDecimal val) {
         return val == null ? BigDecimal.ZERO : val;

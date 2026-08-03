@@ -34,5 +34,3 @@ build/
 *.log
 Dashboard/logs/archived/m2e-dashboard-logger-2024-07-16.0.log
 Dashboard/logs/m2e-dashboard-logger.log
-Dashboard/src/main/resources/application.yml
-Dashboard/src/main/resources/logback-spring.xml

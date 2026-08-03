@@ -1,0 +1,24 @@
+getDepositAssetLiabilities() {
+
+    // 1. Ambil kurs dari Redis
+    KursAllResponse kursResponse = kursService.getKursAll();
+
+    // 2. Ambil akun dari BTS (mentah, tanpa mapping)
+    List<DepositAcctSummarySpDTO> btsAccounts = fetchRawAccounts();
+
+    // 3. Mapping akun ke DTO
+    List<OverviewSubResDTO> mappedAccounts = depositAccountMapper.mapAll(btsAccounts);
+
+    // 4. Konversi semua amount ke target currency
+    List<OverviewSubResDTO> convertedAccounts = currencyConverter.convertAll(
+        mappedAccounts,
+        targetCurrency,    // "USD"
+        kursResponse.getRespData()
+    );
+
+    // 5. Agregasi per subProduct
+    AssetLiabilitiesResDTO result = aggregateBySubProduct(convertedAccounts);
+
+    // 6. Return response
+    return result;
+}

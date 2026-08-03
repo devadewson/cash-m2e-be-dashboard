@@ -1,0 +1,108 @@
+Manifest-Version: 1.0
+Main-Class: com.m2e.dashboard.M2eDashboardApplication
+Class-Path: stringtemplate-3.2.1.jar spring-boot-starter-actuator-3.1.4.
+ jar slf4j-api-2.0.9.jar spring-context-support-6.0.12.jar jakarta.jms-a
+ pi-3.1.0.jar woodstox-core-6.2.1.jar spring-cloud-commons-4.0.4.jar com
+ mons-math-2.2.jar hibernate-core-6.2.9.Final.jar spring-boot-starter-3.
+ 1.4.jar jakarta.xml.bind-api-4.0.1.jar HikariCP-5.0.1.jar netty-codec-4
+ .1.97.Final.jar jfreechart-1.0.19.jar micrometer-tracing-1.1.5.jar spri
+ ng-data-keyvalue-3.1.4.jar fontbox-3.0.3.jar brave-5.15.1.jar netty-han
+ dler-4.1.97.Final.jar jjwt-jackson-0.12.5.jar hibernate-commons-annotat
+ ions-6.0.6.Final.jar jcommon-1.0.23.jar txw2-4.0.3.jar jakarta.annotati
+ on-api-2.1.1.jar commons-jxpath-1.3.jar springdoc-openapi-starter-commo
+ n-2.2.0.jar hibernate-validator-8.0.1.Final.jar jackson-dataformat-yaml
+ -2.15.2.jar batik-svg-dom-1.16.jar jackson-dataformat-xml-2.15.2.jar ne
+ tty-resolver-dns-classes-macos-4.1.97.Final.jar batik-script-1.16.jar l
+ ombok-1.18.30.jar istack-commons-runtime-4.1.2.jar com.ibm.mq.jakarta.c
+ lient-9.3.5.0.jar byte-buddy-1.14.8.jar pdfbox-io-3.0.3.jar jasperrepor
+ ts-6.21.3.jar xstream-1.4.19.jar batik-bridge-1.16.jar spring-boot-star
+ ter-aop-3.1.4.jar springdoc-openapi-starter-webmvc-api-2.2.0.jar common
+ s-collections-3.2.2.jar brave-propagation-aws-0.23.5.jar utils-1.3.1-SN
+ APSHOT.jar resilience4j-consumer-2.0.2.jar spring-data-jpa-3.1.4.jar sw
+ agger-models-jakarta-2.2.15.jar openpdf-1.3.32.jar antlr4-runtime-4.10.
+ 1.jar bcutil-jdk18on-1.77.jar json-20231013.jar spring-jms-6.0.12.jar s
+ pring-batch-infrastructure-5.0.3.jar spring-aop-6.0.12.jar spring-data-
+ commons-3.1.4.jar antlr-runtime-3.4.jar jakarta.transaction-api-2.0.1.j
+ ar LatencyUtils-2.0.3.jar commons-logging-1.3.3.jar spring-boot-starter
+ -reactor-netty-3.1.4.jar batik-util-1.16.jar resilience4j-circularbuffe
+ r-2.0.2.jar commons-codec-1.15.jar spring-oxm-6.0.12.jar spring-webflux
+ -6.0.12.jar spring-jcl-6.0.12.jar batik-anim-1.16.jar HdrHistogram-2.1.
+ 12.jar hawtbuf-1.11.jar spring-boot-starter-activemq-3.1.4.jar ant-1.7.
+ 1.jar jettison-1.4.0.jar jasypt-1.9.3.jar batik-transcoder-1.16.jar rea
+ ctor-core-3.5.10.jar batik-parser-1.16.jar opencsv-5.9.jar batik-gvt-1.
+ 16.jar resilience4j-retry-2.0.2.jar swagger-annotations-jakarta-2.2.15.
+ jar spring-boot-starter-batch-3.1.4.jar netty-resolver-dns-4.1.97.Final
+ .jar micrometer-tracing-bridge-brave-1.1.5.jar netty-codec-http-4.1.97.
+ Final.jar spring-boot-starter-cache-3.1.4.jar spring-aspects-6.0.12.jar
+  batik-css-1.16.jar resilience4j-spring6-2.0.2.jar jul-to-slf4j-2.0.9.j
+ ar xmlpull-1.1.3.1.jar swagger-ui-5.2.0.jar netty-codec-socks-4.1.97.Fi
+ nal.jar mapstruct-processor-1.5.3.Final.jar jackson-datatype-jdk8-2.15.
+ 2.jar netty-handler-proxy-4.1.97.Final.jar spring-boot-starter-web-3.1.
+ 4.jar batik-shared-resources-1.16.jar spring-boot-3.1.4.jar reactor-ext
+ ra-3.5.1.jar accessors-smart-2.4.11.jar spring-boot-starter-data-jpa-3.
+ 1.4.jar styled-xml-parser-7.2.0.jar jasypt-spring-boot-3.0.5.jar common
+ s-lang-2.6.jar spring-boot-starter-webflux-3.1.4.jar spring-orm-6.0.12.
+ jar netty-resolver-4.1.97.Final.jar swagger-core-jakarta-2.2.15.jar net
+ ty-codec-dns-4.1.97.Final.jar forms-7.2.0.jar lombok-mapstruct-binding-
+ 0.1.0.jar batik-ext-1.16.jar resilience4j-spring-boot3-2.0.2.jar logbac
+ k-classic-1.4.11.jar commons-text-1.11.0.jar xml-apis-1.4.01.jar jakart
+ a.ws.rs-api-3.1.0.jar netty-transport-native-epoll-4.1.97.Final-linux-x
+ 86_64.jar netflix-eventbus-0.3.0.jar log4j-to-slf4j-2.20.0.jar netflix-
+ infix-0.3.0.jar aopalliance-1.0.jar spring-cloud-netflix-eureka-client-
+ 4.0.3.jar batik-i18n-1.16.jar gson-2.10.1.jar bcprov-jdk18on-1.77.jar b
+ atik-xml-1.16.jar evictor-1.0.0.jar log4j-api-2.20.0.jar spring-cloud-s
+ tarter-loadbalancer-4.0.4.jar spring-cloud-context-4.0.4.jar jackson-co
+ re-2.15.2.jar hyph-7.2.0.jar activemq-client-jakarta-5.18.2.jar eureka-
+ client-2.0.1.jar avalon-framework-impl-4.2.0.jar bouncy-castle-connecto
+ r-9.0.0.jar jaxb-runtime-4.0.3.jar ant-launcher-1.7.1.jar micrometer-co
+ mmons-1.11.4.jar netty-resolver-dns-native-macos-4.1.97.Final-osx-x86_6
+ 4.jar jasypt-spring-boot-starter-3.0.5.jar aspectjweaver-1.9.20.jar mq-
+ jms-spring-boot-starter-3.2.4.jar resilience4j-micrometer-2.0.2.jar asm
+ -9.3.jar spring-retry-2.0.3.jar micrometer-observation-1.11.4.jar sprin
+ g-webmvc-6.0.12.jar jaxb-core-4.0.3.jar jackson-datatype-jsr310-2.15.2.
+ jar batik-dom-1.16.jar resilience4j-ratelimiter-2.0.2.jar httpcore5-5.2
+ .2.jar commons-cli-1.0.jar bcpkix-jdk18on-1.77.jar tomcat-embed-core-10
+ .1.13.jar barcode4j-2.1.jar spring-boot-actuator-autoconfigure-3.1.4.ja
+ r servo-core-0.12.21.jar jandex-3.0.5.jar commons-digester-2.1.jar spri
+ ng-context-6.0.12.jar commons-beanutils-1.9.4.jar jboss-logging-3.5.3.F
+ inal.jar mxparser-1.2.2.jar sign-7.2.0.jar apm-agent-api-1.54.0.jar poo
+ led-jms-3.1.3.jar layout-7.2.0.jar mapstruct-1.5.3.Final.jar ojdbc8-21.
+ 9.0.0.jar logstash-logback-encoder-8.0.jar spring-boot-starter-json-3.1
+ .4.jar angus-activation-2.0.1.jar ConvModel-1.3.1-SNAPSHOT.jar tomcat-e
+ mbed-websocket-10.1.13.jar httpclient-4.5.3.jar spring-tx-6.0.12.jar sp
+ ring-cloud-starter-netflix-eureka-client-4.0.3.jar spring-messaging-6.0
+ .12.jar pw-swift-core-SRU2023-10.1.16.jar commons-collections4-4.4.jar 
+ joda-time-2.3.jar context-propagation-1.0.5.jar httpclient5-5.2.1.jar r
+ eactor-netty-http-1.1.11.jar jackson-databind-2.15.2.jar spring-boot-ac
+ tuator-3.1.4.jar jakarta.inject-api-2.0.1.jar lettuce-core-6.2.6.RELEAS
+ E.jar xml-apis-ext-1.3.04.jar batik-awt-util-1.16.jar jakarta.persisten
+ ce-api-3.1.0.jar brave-instrumentation-http-5.15.1.jar font-asian-7.2.0
+ .jar resilience4j-core-2.0.2.jar commons-configuration-1.10.jar commons
+ -lang3-3.12.0.jar snakeyaml-1.33.jar jackson-annotations-2.15.2.jar jak
+ arta.servlet-api-6.0.0.jar jjwt-api-0.12.5.jar brave-context-slf4j-5.15
+ .1.jar netty-codec-http2-4.1.97.Final.jar spring-boot-starter-data-redi
+ s-3.1.4.jar springdoc-openapi-starter-webmvc-ui-2.2.0.jar resilience4j-
+ annotations-2.0.2.jar resilience4j-framework-common-2.0.2.jar reactor-n
+ etty-core-1.1.11.jar batik-svggen-1.16.jar httpcore-4.4.16.jar batik-co
+ dec-1.16.jar xmlgraphics-commons-2.7.jar tomcat-embed-el-10.1.13.jar co
+ mmons-io-1.3.1.jar jjwt-impl-0.12.5.jar pdfa-7.2.0.jar spring-security-
+ rsa-1.0.12.RELEASE.jar antlr-2.7.7.jar classmate-1.5.1.jar spring-beans
+ -6.0.12.jar modelmapper-3.2.0.jar spring-boot-autoconfigure-3.1.4.jar n
+ etty-transport-4.1.97.Final.jar spring-security-crypto-6.1.4.jar spring
+ -boot-starter-jdbc-3.1.4.jar spring-boot-starter-tomcat-3.1.4.jar jjwt-
+ 0.12.5.jar jakarta.activation-api-2.1.2.jar netty-transport-native-unix
+ -common-4.1.97.Final.jar stax2-api-4.2.1.jar pdfbox-3.0.3.jar svg-7.2.0
+ .jar spring-cloud-loadbalancer-4.0.4.jar jackson-module-parameter-names
+ -2.15.2.jar io-7.2.0.jar spring-jdbc-6.0.12.jar spring-boot-starter-log
+ ging-3.1.4.jar resilience4j-bulkhead-2.0.2.jar resilience4j-circuitbrea
+ ker-2.0.2.jar spring-cloud-starter-4.0.4.jar logback-core-1.4.11.jar eu
+ reka-core-2.0.1.jar spring-core-6.0.12.jar guava-19.0.jar commons-7.2.0
+ .jar commons-pool2-2.11.1.jar resilience4j-timelimiter-2.0.2.jar microm
+ eter-core-1.11.4.jar ecj-3.21.0.jar netty-common-4.1.97.Final.jar sprin
+ g-web-6.0.12.jar spring-boot-starter-validation-3.1.4.jar jakarta.valid
+ ation-api-3.0.2.jar spring-data-redis-3.1.4.jar spring-batch-core-5.0.3
+ .jar json-path-2.8.0.jar barcodes-7.2.0.jar netty-transport-classes-epo
+ ll-4.1.97.Final.jar httpcore5-h2-5.2.2.jar kernel-9.0.0.jar reactive-st
+ reams-1.0.4.jar batik-constants-1.16.jar json-smart-2.4.11.jar netty-bu
+ ffer-4.1.97.Final.jar spring-expression-6.0.12.jar
+

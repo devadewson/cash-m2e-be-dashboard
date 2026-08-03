@@ -33,14 +33,15 @@ import static com.m2e.dashboard.enums.SPEnum.*;
 @Slf4j
 public class CommonService {
     private final BaseSpService baseSpService;
-    private final RedisHelper redisHelper;
+    @Autowired(required = false)
+    private  RedisHelper redisHelper;
     private final UtilityFunctions utilityFunctions;
     private final PaymentTypeRepository paymentTypeRepository;
 
     @Autowired
-    public CommonService(BaseSpService baseSpService, RedisHelper redisHelper, UtilityFunctions utilityFunctions, PaymentTypeRepository paymentTypeRepository){
+    public CommonService(BaseSpService baseSpService, UtilityFunctions utilityFunctions, PaymentTypeRepository paymentTypeRepository){
         this.baseSpService = baseSpService;
-        this.redisHelper = redisHelper;
+//        this.redisHelper = redisHelper;
         this.utilityFunctions = utilityFunctions;
         this.paymentTypeRepository = paymentTypeRepository;
     }

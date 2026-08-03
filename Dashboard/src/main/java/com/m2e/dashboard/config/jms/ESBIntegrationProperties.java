@@ -16,19 +16,19 @@ import java.util.Map;
 @Data
 @Slf4j
 public class ESBIntegrationProperties {
-
-    public final Map<String, Map<String, Object>> ibmMQ;
-    public final Map<String, ESBPropertiesDTO> ibmMQMap = new HashMap<>();
-
-    public ESBPropertiesDTO getIbmMq(String serviceName){
-        return ibmMQMap.get(serviceName);
-    }
-
-    @PostConstruct
-    public void init() {
-        ibmMQ.forEach((key, map) -> {
-            ESBPropertiesDTO configDTO = ESBIntegrationMapper.INSTANCE.mapPropertiesToESBIntegrationConfigDTO(map);
-            ibmMQMap.put(key, configDTO);
-        });
-    }
+//
+//    public final Map<String, Map<String, Object>> ibmMQ;
+//    public final Map<String, ESBPropertiesDTO> ibmMQMap = new HashMap<>();
+//
+//    public ESBPropertiesDTO getIbmMq(String serviceName){
+//        return ibmMQMap.get(serviceName);
+//    }
+//
+//    @PostConstruct
+//    public void init() {
+//        ibmMQ.forEach((key, map) -> {
+//            ESBPropertiesDTO configDTO = ESBIntegrationMapper.INSTANCE.mapPropertiesToESBIntegrationConfigDTO(map);
+//            ibmMQMap.put(key, configDTO);
+//        });
+//    }
 }
