@@ -1,6 +1,8 @@
 spring:
   application:
     name: M2E-DASHBOARD
+  main:
+    allow-bean-definition-overriding: true
 
   jpa:
     properties:
