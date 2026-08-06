@@ -77,9 +77,11 @@ pipeline {
 
                         # Update version in pom.xml (if property exists)
                         sed -i "s@<build.version>.*</build.version>@<build.version>${image_version}</build.version>@" pom.xml || true
+                        sed -i "s@<m2e.utils.version>.*</m2e.utils.version>@<m2e.utils.version>${UTILS_VERSION}</m2e.utils.version>@" pom.xml || true
+                        sed -i "s@<m2e.model.version>.*</m2e.model.version>@<m2e.model.version>${MODEL_VERSION}</m2e.model.version>@" pom.xml || true
 
-                        mvn clean install -Djansi.tmpdir=. -DskipTests -U -s $MAVEN_SETTINGS_XML
-                        mvn package spring-boot:repackage -Djansi.tmpdir=. -DskipTests -U -s $MAVEN_SETTINGS_XML
+                        mvn clean install -Djansi.tmpdir=. -DskipTests -U -s $MAVEN_SETTINGS_XML -Dm2e.utils.version=${UTILS_VERSION} -Dm2e.model.version=${MODEL_VERSION}
+                        mvn package spring-boot:repackage -Djansi.tmpdir=. -DskipTests -U -s $MAVEN_SETTINGS_XML -Dm2e.utils.version=${UTILS_VERSION} -Dm2e.model.version=${MODEL_VERSION}
 
                         # Copy JAR from submodule to root target directory so Dockerfile and check can find it
                         mkdir -p target

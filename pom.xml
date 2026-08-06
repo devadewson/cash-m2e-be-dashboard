@@ -25,6 +25,8 @@
 		<build.version>1.3.1-SNAPSHOT</build.version>
 		<sonar.coverage.exclusions>**/*</sonar.coverage.exclusions>
 		<maven.deploy.skip>true</maven.deploy.skip>
+		<m2e.utils.version>1.3.1-SNAPSHOT</m2e.utils.version>
+		<m2e.model.version>1.3.1-SNAPSHOT</m2e.model.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -78,13 +80,13 @@
 		<dependency>
 			<groupId>com.m2e</groupId>
 			<artifactId>ConvModel</artifactId>
-			<version>${build.version}</version>
+			<version>${m2e.model.version}</version>
 		</dependency>
 
 		<dependency>
 			<groupId>com.m2e</groupId>
 			<artifactId>utils</artifactId>
-			<version>${build.version}</version>
+			<version>${m2e.utils.version}</version>
 		</dependency>
 
 		<dependency>
