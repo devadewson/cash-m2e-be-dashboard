@@ -73,4 +73,23 @@ public class RedisConfig {
         template.afterPropertiesSet();
         return template;
     }
+
+    @Bean
+    public org.springframework.retry.support.RetryTemplate retryTemplate() {
+        return new org.springframework.retry.support.RetryTemplate();
+    }
+
+    @Bean
+    public com.m2e.utils.redis.helper.RedisHelper redisHelper(
+            RedisTemplate<String, Object> redisTemplate,
+            org.springframework.retry.support.RetryTemplate retryTemplate) {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                com.fasterxml.jackson.annotation.JsonTypeInfo.As.PROPERTY
+        );
+        return new com.m2e.utils.redis.helper.RedisHelper(redisTemplate, mapper, retryTemplate);
+    }
 }
