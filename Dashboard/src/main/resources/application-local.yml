@@ -1,0 +1,88 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  cache:
+    type: redis
+
+  datasource:
+    url: jdbc:oracle:thin:@10.235.84.41:1771:SSO
+    username: SSOPORTAL
+    password: P0rt4l#m2e
+    driver-class-name: oracle.jdbc.driver.OracleDriver
+
+  data:
+    redis:
+      host: 10.235.83.32
+      port: 6379
+      password: M@ybank2025!
+
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.Oracle12cDialect
+        jdbc:
+          batch_size: 500
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+  cloud:
+    discovery:
+      enabled: false
+
+jasypt:
+  encryptor:
+    password: local
+
+m2e:
+  implementation: local
+
+  # SFTP Configuration for LOCAL
+  sftp:
+    host: 10.230.81.142
+    port: 22
+    username: m2e_trade
+    password: MaybankWinner1!
+    remote-directory: /XCOMDATA/M2ETRADE/Convergence
+    file-name: EDW_TRADE.TXT
+    local-temp-directory: C:/temp/sftp-files
+    polling-interval: 300000
+
+  integration:
+    notificationProcessing:
+      url: http://localhost/dummy
+      uri: http://localhost/dummy
+    eim:
+      enabled: false  # MATIKAN EIM untuk local
+
+cfo:
+  app:
+    jwtSecret: 12345678901234567890123456789012
+
+eureka:
+  client:
+    enabled: false
+
+logger:
+  path: ${user.home}/app/cfo/dashboard/logs
+
+integration:
+  bts-url: http://10.230.83.144:10003/bts
+  esb-account-url: http://10.235.66.96:8800/id/mbi
+
+rate:
+  api:
+    url: https://erate-dev.maybank.co.id:8668
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    doc-expansion: none
+    tagsSorter: alpha

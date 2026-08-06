@@ -1,5 +1,5 @@
 spring:
   config:
     import:
-      - file:/app/cfo-dev/Dashboard/properties/application.yml
-      - file:/app/cfo-dev/Dashboard/properties/mq.properties
+      - file:/app/cfo-dev/dashboard/properties/application.yml
+      - file:/app/cfo-dev/properties/messaging.properties
