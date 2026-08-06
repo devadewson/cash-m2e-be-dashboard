@@ -2,7 +2,6 @@ package com.m2e.dashboard;
 
 import com.m2e.utils.jdbc.config.EnableJdbcUtil;
 import com.m2e.utils.observability.config.EnableElasticApmFilter;
-import com.m2e.utils.redis.config.EnableRedisUtil;
 import com.m2e.utils.validator.config.EnableValidator;
 import com.m2e.utils.webclient.config.EnableWebClientUtil;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
@@ -29,7 +28,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableWebClientUtil
 @EnableElasticApmFilter
 @EnableCaching
-@EnableRedisUtil
 @OpenAPIDefinition(
         info =
                 @Info(
