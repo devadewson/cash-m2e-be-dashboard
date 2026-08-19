@@ -27,7 +27,7 @@ public class CorpUserRepositoryImpl implements CorpUserCustomRepository {
             return 0;
         }
 
-        String sql = "UPDATE TBL_CORP_USR@CTS_SSO SET " + columnName + " = 'Y' WHERE USR_ID = :userId AND CORP_ID = :corpID";
+        String sql = "UPDATE TBL_CORP_USR SET " + columnName + " = 'Y' WHERE USR_ID = :userId AND CORP_ID = :corpID";
 
         int updated = entityManager.createNativeQuery(sql)
                 .setParameter("userId", userId)

@@ -11,6 +11,6 @@ import java.util.Optional;
 @Repository
 public interface CorpUserRepository extends JpaRepository<CorpUser, String>, CorpUserCustomRepository {
 
-    @Query(value = "SELECT usr_nm FROM TBL_CORP_USR@CTS_SSO WHERE USR_ID = :userId", nativeQuery = true)
+    @Query(value = "SELECT usr_nm FROM TBL_CORP_USR WHERE USR_ID = :userId", nativeQuery = true)
     Optional<String> findByUserId(@Param("userId") String userId);
 }

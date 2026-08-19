@@ -65,7 +65,7 @@ public class DepositCAControllerRest {
     @Operation(
         summary = "US 1, 3, 4 - Get deposit CA summary list",
         description = "Get deposit CA summary list")
-    @GetMapping("/acct-list")
+    @PostMapping("/acct-list")
     public ResponseEntity<ApiResponse<DepositAcctListingDTO>> getAccountList(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
             @RequestBody AccountListReq req) {

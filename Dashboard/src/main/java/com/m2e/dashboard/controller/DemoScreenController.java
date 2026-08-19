@@ -25,6 +25,11 @@ public class DemoScreenController {
     public ResponseEntity<ApiResponse<String>> createCorpUser
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth,
              @RequestBody UserJourneyReqDTO userJourneyReqDto) {
+//        String userId = "LCUS-RAHGLOLI";
+//        String corpId = "LCUS-RAHGLOLI";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
         UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
 
         return ResponseEntity.status(HttpStatus.OK).body(demoScreenService.updateUserJourney(auth, userAndCorp,userJourneyReqDto));
