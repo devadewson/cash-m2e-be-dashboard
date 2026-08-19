@@ -16,7 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "M2UBIZM25-886 Trade - Trade Financing")
+@Tag(name = "Trade - Trade Financing", description = "PIC: Deva Dewson")
 @RestController
 @Slf4j
 @RequestMapping("/trade/TradeFinancing/v1")
@@ -28,15 +28,6 @@ public class TradeFinancingController {
     @Autowired
     JwtUtil jwtUtil;
 
-//    @Operation(
-//            summary = "US 2, 2.1, 2.2 [BOTTOM] - Export LC/SKBDN Colection Account List",
-//            description = "Get trades account - Export LC/SKBDN Colection list")
-//    @PostMapping("acct-list")
-//    public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList(@RequestHeader(HttpHeaders.AUTHORIZATION) String auth, @RequestBody AccountListReq req) {
-//        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-//        return ResponseEntity.ok(tradeService.getTradeAccountListingSp(userAndCorp, req, TradeEnum.EXPORT_LC_SKBDN_COLECTION));
-//    }
-
     @Operation(
             summary = "US 2, 2.1, 2.2 [TOP] - Trade Financing Account Stats",
             description = "Get trades account - Trade Financing stats"
@@ -44,12 +35,12 @@ public class TradeFinancingController {
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-        String userId = "0005177476";
-        String corpId = "0005177476";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
-//      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+//        String userId = "0005177476";
+//        String corpId = "0005177476";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
+      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.TRADE_FINANCING));
     }
     @Operation(
@@ -58,13 +49,12 @@ public class TradeFinancingController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-        String userId = "0005177476";
-        String corpId = "0005177476";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
-
-        //UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+//        String userId = "0005177476";
+//        String corpId = "0005177476";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.TRADE_FINANCING));
     }
 }

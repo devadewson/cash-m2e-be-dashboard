@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.*;
  * US 18 - Customise field~ hmm - NOT YET
  * US 19 - MT103 - NOT YET
  */
-@Tag(name = "M2UBIZM25-180 - Deposit CA - Current Accounts", description = "PIC: Deva Dewson")
+@Tag(name = "Deposit CA - Current Accounts", description = "PIC: Deva Dewson")
 @RestController
 @Slf4j
 @RequestMapping("/deposit/ca/v1")

@@ -16,7 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "M2UBIZM25-886 Trade - Incoming Collection")
+@Tag(name = "Trade - Outgoing Collection", description = "PIC: Deva Dewson")
 @RestController
 @Slf4j
 @RequestMapping("/trade/OutgoingCollection/v1")
@@ -34,13 +34,13 @@ public class OutgoingColectionController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-        String userId = "0011944737";
-        String corpId = "0011944737";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
+//        String userId = "0011944737";
+//        String corpId = "0011944737";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
 
-        //        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.OUTGOING_COLLECTION));
     }
 
@@ -51,12 +51,12 @@ public class OutgoingColectionController {
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-        String userId = "0011944737";
-        String corpId = "0011944737";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
-//      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+//        String userId = "0011944737";
+//        String corpId = "0011944737";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
+      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.OUTGOING_COLLECTION));
     }
 }

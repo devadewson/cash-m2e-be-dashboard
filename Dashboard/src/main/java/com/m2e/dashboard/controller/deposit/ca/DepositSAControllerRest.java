@@ -21,7 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "M2UBIZM25-180 - Deposit SA - Saving Accounts", description = "PIC: Deva Dewson")
+@Tag(name = "Deposit SA - Saving Accounts", description = "PIC: Deva Dewson")
 @RestController
 @RequestMapping("/deposit/sa/v1")
 public class DepositSAControllerRest {
