@@ -20,7 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 
-@Tag(name = "M2UBIZM25-180 - Deposit FD - Fixed Deposits", description = "Deva Dewson")
+@Tag(name = "Deposit FD - Fixed Deposits", description = "Deva Dewson")
 @RestController
 @Slf4j
 @RequestMapping("/deposit/fd/v1")

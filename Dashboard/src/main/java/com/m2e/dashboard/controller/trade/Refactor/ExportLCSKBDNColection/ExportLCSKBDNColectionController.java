@@ -16,7 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "M2UBIZM25-886 Trade - Export LC/SKBDN Collection")
+@Tag(name = "Trade - Export LC/SKBDN Collection", description = "PIC: Deva Dewson")
 @RestController
 @Slf4j
 @RequestMapping("/trade/ExportLCSKBDNCollection/v1")
@@ -35,12 +35,12 @@ public class ExportLCSKBDNColectionController {
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-        String userId = "LCUS-ILSSPICO";
-        String corpId = "LCUS-ILSSPICO";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
-//      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+//        String userId = "LCUS-ILSSPICO";
+//        String corpId = "LCUS-ILSSPICO";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
+      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.EXPORT_LC_SKBDN_COLLECTION));
     }
 
@@ -50,13 +50,12 @@ public class ExportLCSKBDNColectionController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-        String userId = "LCUS-ILSSPICO";
-        String corpId = "LCUS-ILSSPICO";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
-
-        //UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+//        String userId = "LCUS-ILSSPICO";
+//        String corpId = "LCUS-ILSSPICO";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.EXPORT_LC_SKBDN_COLLECTION));
     }
 }
