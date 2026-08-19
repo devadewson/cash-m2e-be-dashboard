@@ -16,7 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "M2UBIZM25-886 Trade - Import LC/SKBDN")
+@Tag(name = "Trade - Import LC/SKBDN", description = "PIC: Deva Dewson")
 @RestController
 @Slf4j
 @RequestMapping("/trade/ImportLCSKBDN/v1")
@@ -36,12 +36,12 @@ public class ImportLCSKBDNController {
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-        String userId = "0010274957";
-        String corpId = "0010274957";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
-//      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+//        String userId = "0010274957";
+//        String corpId = "0010274957";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
+      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.IMPORT_LC_SKBDN));
     }
 
@@ -51,13 +51,13 @@ public class ImportLCSKBDNController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-        String userId = "0010274957";
-        String corpId = "0010274957";
-        UserAndCorp userAndCorp = new UserAndCorp();
-        userAndCorp.setUserId(userId);
-        userAndCorp.setCorpId(corpId);
+//        String userId = "0010274957";
+//        String corpId = "0010274957";
+//        UserAndCorp userAndCorp = new UserAndCorp();
+//        userAndCorp.setUserId(userId);
+//        userAndCorp.setCorpId(corpId);
 
-        //UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.IMPORT_LC_SKBDN));
     }
 }

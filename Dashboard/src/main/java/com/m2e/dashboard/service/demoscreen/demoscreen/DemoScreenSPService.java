@@ -1,4 +1,4 @@
-package com.m2e.dashboard.service.demoscreen;
+package com.m2e.dashboard.service.demoscreen.demoscreen;
 
 import com.m2e.dashboard.sp.demoscreen.request.DemoScreenSpParam;
 import com.m2e.dashboard.sp.demoscreen.response.DemoScreenSpDTO;
