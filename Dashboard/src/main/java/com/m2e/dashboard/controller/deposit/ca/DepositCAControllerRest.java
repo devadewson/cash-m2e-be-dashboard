@@ -39,68 +39,57 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/deposit/ca/v1")
 public class DepositCAControllerRest {
 
-    private static final Logger logger = LoggerFactory.getLogger(DepositCAControllerRest.class);
+        private static final Logger logger = LoggerFactory.getLogger(DepositCAControllerRest.class);
 
-    @Autowired
-    private DepositCAAccountListService depositCAAccountListService;
+        @Autowired
+        private DepositCAAccountListService depositCAAccountListService;
 
-    @Autowired
-    private MockDepositDataService mockDepositDataService;
+        @Autowired
+        private MockDepositDataService mockDepositDataService;
 
-    @Autowired
-    private DepositCAAccountDetailService depositCAAccountDetailService;
-    @Autowired
-    private  DepositCAAccountStatsService depositCAAccountStatsService;
-    @Autowired
-    private TradeService tradeService;
+        @Autowired
+        private DepositCAAccountDetailService depositCAAccountDetailService;
+        @Autowired
+        private DepositCAAccountStatsService depositCAAccountStatsService;
+        @Autowired
+        private TradeService tradeService;
 
+        @Autowired
+        JwtUtil jwtUtil;
 
-    @Autowired
-    JwtUtil jwtUtil;
+        // @Autowired
 
-    // @Autowired
+        // DepositCAService depositCAService;
 
-    // DepositCAService depositCAService;
+        @Operation(summary = "US 1, 3, 4 - Get deposit CA summary list", description = "Get deposit CA summary list")
+        @PostMapping("/acct-list")
+        public ResponseEntity<ApiResponse<DepositAcctListingDTO>> getAccountList(
+                        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
+                        @RequestBody AccountListReq req) {
 
-    @Operation(
-        summary = "US 1, 3, 4 - Get deposit CA summary list",
-        description = "Get deposit CA summary list")
-    @PostMapping("/acct-list")
-    public ResponseEntity<ApiResponse<DepositAcctListingDTO>> getAccountList(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
-            @RequestBody AccountListReq req) {
+                UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+                return ResponseEntity.ok(
+                                depositCAAccountListService.getAccountList(userAndCorp, req));
+        }
 
-        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.ok(
-                depositCAAccountListService.getAccountList(userAndCorp, req)
-        );
-    }
+        @Operation(summary = "US 7, 8, 9, 10, 11 - Retrieve Deposit Account Detail", description = "Retrieve Deposit Account Detail")
+        @PostMapping("/acct-dtl")
+        public ResponseEntity<ApiResponse<DepositAccountDetailDTO>> getAccountDetail(
+                        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
+                        @Valid @RequestBody DepositAccountDetailReqDTO request) {
+                UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+                return ResponseEntity.ok(
+                                depositCAAccountDetailService.getAccountDetail(userAndCorp, request));
 
-    @Operation(
-            summary = "US 7, 8, 9, 10, 11 - Retrieve Deposit Account Detail",
-            description = "Retrieve Deposit Account Detail")
-    @PostMapping("/acct-dtl")
-    public ResponseEntity<ApiResponse<DepositAccountDetailDTO>> getAccountDetail(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth, @Valid
-            @RequestBody DepositAccountDetailReqDTO request) {
-        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.ok(
-                depositCAAccountDetailService.getAccountDetail(userAndCorp, request));
+        }
 
-    }
-
-    @Operation(
-            summary = "US 1, 3, 4 - Get deposit CA stats",
-            description = "Get deposit CA stats"
-    )
-    @PostMapping("acct-stats")
-    public ResponseEntity<ApiResponse<DepositAcctStatsDTO>> getAccountStats(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth, @Valid
-            @RequestBody DepositAcctStatsReqDTO request) {
-        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.ok(depositCAAccountStatsService.getDepositCAAccountStats(userAndCorp, request));
-    }
+        @Operation(summary = "US 1, 3, 4 - Get deposit CA stats", description = "Get deposit CA stats")
+        @PostMapping("acct-stats")
+        public ResponseEntity<ApiResponse<DepositAcctStatsDTO>> getAccountStats(
+                        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
+                        @Valid @RequestBody DepositAcctStatsReqDTO request) {
+                UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+                return ResponseEntity.ok(depositCAAccountStatsService.getDepositCAAccountStats(userAndCorp, request));
+        }
 
 }
-
-
