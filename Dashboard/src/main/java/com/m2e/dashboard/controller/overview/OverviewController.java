@@ -55,7 +55,13 @@ public class OverviewController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String auth,
             @RequestBody AssetLiabilitiesGraphReqDTO request) {
 
-        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        String userId = "0004528282";
+        String corpId = "0004528282";
+        UserAndCorp userAndCorp = new UserAndCorp();
+        userAndCorp.setUserId(userId);
+        userAndCorp.setCorpId(corpId);
+//      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+
         return ResponseEntity.status(HttpStatus.OK)
                 .body(assetGraphService.getAssetGraph(userAndCorp, request));
     }
