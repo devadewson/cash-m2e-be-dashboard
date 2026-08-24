@@ -10,6 +10,7 @@ import com.m2e.dashboard.dto.overview.request.AssetLiabilitiesReqDTO;
 import com.m2e.dashboard.dto.overview.request.OverviewDownloadReqDTO;
 import com.m2e.dashboard.dto.overview.request.OverviewReqDTO;
 import com.m2e.dashboard.dto.overview.response.OverviewResDTO;
+import com.m2e.dashboard.service.overview.AssetGraph.AssetGraphService;
 import com.m2e.dashboard.service.overview.OverviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,6 +33,8 @@ import static com.m2e.dashboard.util.DownloadUtil.setHttpHeadersForDownload;
 public class OverviewController {
     @Autowired
     JwtUtil jwtUtil;
+    @Autowired
+    AssetGraphService assetGraphService;
 
     @Autowired
     OverviewService overviewService;
@@ -46,14 +49,15 @@ public class OverviewController {
         return ResponseEntity.status(HttpStatus.OK).body(overviewService.getAssetLiabilities(auth, userAndCorp, assetLiabilitiesReqDto));
     }
 
-    @Operation(
-            summary = "US 1 - Portfolio Overview Graph",
-            description = "Asset and Liabilities Graph"
-    )
+    @Operation(summary = "US 1 - Portfolio Overview Graph", description = "Asset and Liabilities Graph")
     @PostMapping("/asset-graph")
-    public ResponseEntity<?> getAssetLiabilitiesGraph(@RequestHeader(HttpHeaders.AUTHORIZATION) String auth, @RequestBody AssetLiabilitiesGraphReqDTO assetLiabilitiesReqDto) {
+    public ResponseEntity<?> getAssetLiabilitiesGraph(
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String auth,
+            @RequestBody AssetLiabilitiesGraphReqDTO request) {
+
         UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.status(HttpStatus.OK).body(overviewService.getAssetLiabilitiesGraph(userAndCorp, assetLiabilitiesReqDto)) ;
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(assetGraphService.getAssetGraph(userAndCorp, request));
     }
     @Operation(
             summary = "US 2 - Main Download Portfolio Overview Files",
