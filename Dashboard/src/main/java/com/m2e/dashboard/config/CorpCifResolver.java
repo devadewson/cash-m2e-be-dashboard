@@ -1,6 +1,7 @@
 package com.m2e.dashboard.config;
 
 
+import com.m2e.dashboard.repository.CorpCIFRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -13,10 +14,7 @@ public class CorpCifResolver {
 
     private final CorpCIFRepository corpRepository;
 
-    /**
-     * Terjemahkan CORP_ID dari JWT menjadi CIF_NO.
-     * Throw kalau tidak ketemu — jangan lanjut dengan CIF null.
-     */
+
     @Cacheable(value = "corp-cif", key = "#corpId", unless = "#result == null")
     public String resolveCif(String corpId) {
         String cif = corpRepository.findCifNoByCorpId(corpId);
