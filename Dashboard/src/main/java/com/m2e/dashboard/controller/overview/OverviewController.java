@@ -89,7 +89,7 @@ public class OverviewController {
     )
     @PostMapping("/overview")
     public ResponseEntity<?> getProductOverview(@RequestHeader(HttpHeaders.AUTHORIZATION) String auth, @RequestBody OverviewReqDTO overviewReqDto) {
-        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+            UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.status(HttpStatus.OK).body(overviewService.getProductOverview(userAndCorp, overviewReqDto));
     }
 

@@ -38,7 +38,7 @@ public class DepositFDControllerRest {
     @Operation(
             summary = "US 1, 3, 4 - Get deposit FD summary list",
             description = "Get deposit FD summary list")
-    @GetMapping("/acct-list")
+    @PostMapping("/acct-list")
     public ResponseEntity<ApiResponse<DepositAcctListingDTO>> getAccountList(
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth,
             @RequestBody AccountListReq req) {
