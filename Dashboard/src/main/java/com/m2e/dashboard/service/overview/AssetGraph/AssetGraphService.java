@@ -1,6 +1,7 @@
 package com.m2e.dashboard.service.overview.AssetGraph;
 
 
+import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
@@ -35,6 +36,7 @@ public class AssetGraphService {
     private final KursService kursService;
     private final CurrencyConverterService currencyConverterService;
     private final GraphCurrencyConverter graphConverter;
+    private final CorpCifResolver corpCifResolver;
 
     private static final int WEEK_COUNT = 8;
     private static final int MONTH_COUNT = 12;
@@ -44,7 +46,7 @@ public class AssetGraphService {
     public ApiResponse<AssetLiabilitiesGraphResDTO> getAssetGraph(
             UserAndCorp userAndCorp, AssetLiabilitiesGraphReqDTO request) {
 
-        String cif = userAndCorp.getCorpId();
+        String cif = corpCifResolver.resolveCif(userAndCorp.getCorpId());
         String targetCurrency = request.getBaseCurrency() != null
                 ? request.getBaseCurrency().toUpperCase() : "IDR";
 
@@ -127,10 +129,9 @@ public class AssetGraphService {
     }
 
     private ApiResponse<AssetLiabilitiesGraphResDTO> errorResponse(String message) {
+        log.warn("[GRAPH] Returning error: {}", message);
         ApiResponse<AssetLiabilitiesGraphResDTO> response = new ApiResponse<>();
-        ErrorResponse header = new ErrorResponse("99");
-        header.setResponseCode(message);
-        response.setMsgHeader(header);
+        response.setMsgHeader(new ErrorResponse("99"));
         return response;
     }
 }

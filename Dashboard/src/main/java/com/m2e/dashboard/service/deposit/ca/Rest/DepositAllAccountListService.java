@@ -7,8 +7,6 @@ import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.deposit.ca.response.DepositAcctListingDTO;
 import com.m2e.dashboard.model.BTS.Request.Summary;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
-import com.m2e.dashboard.service.overview.Refactor.KursService;
-import com.m2e.dashboard.model.Trapi.Response.KursAllResponse;
 import com.m2e.dashboard.sp.deposit.ca.response.DepositAcctSummarySpDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,19 +22,15 @@ import java.util.List;
 public class DepositAllAccountListService {
 
     private final BTSAccountClient btsAccountClient;
-    private final KursService kursService;
 
     @Cacheable(
             value = "deposit-all-account",
-            key = "#user.userId + '_' + #req.corpCifNo"
+            key = "#user.userId + '_' + #req.corpCifNo",
+            unless = "#result == null || #result.msgBody == null"
     )
     public ApiResponse<DepositAcctListingDTO> getAllAccounts(UserAndCorp user, AccountListReq req) {
         log.info("START getAllAccounts | CIF={} | userId={}", req.getCorpCifNo(), user.getUserId());
 
-        // ===== STEP 1: Fetch & Cache Kurs
-        fetchAndValidateKurs();
-
-        // ===== STEP 2: Fetch BTS Account Summary =====
         Summary request = new Summary();
         request.setUserId(user.getUserId());
         request.setCif(req.getCorpCifNo());
@@ -47,7 +41,7 @@ public class DepositAllAccountListService {
         validateResponse(btsResp);
 
         List<DepositAcctSummarySpDTO> allAccounts = new ArrayList<>();
-        if (btsResp.getResponseData() != null && btsResp.getResponseData().getAssetList() != null) {
+        if (btsResp.getResponseData().getAssetList() != null) {
             btsResp.getResponseData().getAssetList().forEach(category -> {
                 if (category.getProductList() != null) {
                     category.getProductList().forEach(product -> {
@@ -64,6 +58,8 @@ public class DepositAllAccountListService {
             });
         }
 
+        log.info("Fetched {} accounts from BTS | CIF={}", allAccounts.size(), req.getCorpCifNo());
+
         DepositAcctListingDTO listing = new DepositAcctListingDTO();
         listing.setDatas(new com.m2e.dashboard.dto.common.SearchCollectionResponse<>(
                 1, 1, -1, allAccounts.size()));
@@ -73,20 +69,6 @@ public class DepositAllAccountListService {
         response.setMsgHeader(new ErrorResponse("0"));
         response.setMsgBody(listing);
         return response;
-    }
-
-    private void fetchAndValidateKurs() {
-        try {
-            KursAllResponse kursResponse = kursService.getKursAll();
-            if (kursResponse != null && kursResponse.getRespData() != null) {
-                log.info("Kurs data ready. Total currencies available: {}",
-                        kursResponse.getRespData().size());
-            } else {
-                log.warn("Kurs data not available or empty, continue without kurs");
-            }
-        } catch (Exception e) {
-            log.error("Error fetching kurs: {}", e.getMessage(), e);
-        }
     }
 
     private void validateResponse(SummaryResponse response) {

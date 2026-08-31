@@ -65,20 +65,6 @@ public class OverviewController {
         return ResponseEntity.status(HttpStatus.OK)
                 .body(assetGraphService.getAssetGraph(userAndCorp, request));
     }
-    @Operation(
-            summary = "US 2 - Main Download Portfolio Overview Files",
-            description = "Main Download Portfolio Overview Files"
-    )
-    @PostMapping(value = "/download", produces = {MediaType.APPLICATION_OCTET_STREAM_VALUE})
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(schema = @Schema(oneOf = {OverviewDownloadReqDTO.class}))
-    )
-    public ResponseEntity<byte[]> downloadPortfolioOverview(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth, @RequestBody DownloadReq request) throws JsonProcessingException {
-        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        DownloadDTO result = overviewService.downloadOverview(auth, userAndCorp, request);
-        HttpHeaders headers = setHttpHeadersForDownload(result);
-        return new ResponseEntity<>(result.getData(), headers, HttpStatus.OK);
-    }
 
     @Operation(
             summary = "Get Overview",

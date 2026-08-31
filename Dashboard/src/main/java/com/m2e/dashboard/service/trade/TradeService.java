@@ -1,5 +1,6 @@
 package com.m2e.dashboard.service.trade;
 
+import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
@@ -34,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 public class TradeService {
 
     private final DatamartAgreementRepository datamartAgreementRepository;
+    private final CorpCifResolver corpCifResolver;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -50,23 +52,30 @@ public class TradeService {
     )
     public ApiResponse<TradeAcctStatsDTO> getTradeAccountStats(UserAndCorp userAndCorp, TradeEnum tradeEnum) {
         long start = System.currentTimeMillis();
-        String corpId = userAndCorp.getCorpId();
         String acctType = tradeEnum.getAcctType();
 
         LocalDate today = LocalDate.now();
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
 
-        log.info("[TradeAcctStats] START corpId={}, acctType={}, filterDate={}", corpId, acctType, today);
-
         try {
+            String cifNo = corpCifResolver.resolveCif(userAndCorp.getCorpId());
+
+            log.info("[TradeAcctStats] START corpId={}, cif={}, acctType={}, filterDate={}",
+                    userAndCorp.getCorpId(), cifNo, acctType, today);
+
             TradeAcctStatsProjection result =
-                    datamartAgreementRepository.getAccountStats(corpId, acctType, startOfDay, endOfDay);
+                    datamartAgreementRepository.getAccountStats(cifNo, acctType, startOfDay, endOfDay);
 
             long noOfAccounts = (result != null && result.getNoOfAccounts() != null)
                     ? result.getNoOfAccounts() : 0L;
             BigDecimal totalOutstandingBal = (result != null && result.getTotalOutstandingBal() != null)
                     ? result.getTotalOutstandingBal() : BigDecimal.ZERO;
+
+            if (noOfAccounts == 0) {
+                log.warn("[TradeAcctStats] Tidak ada data untuk cif={}, acctType={}, tanggal={}. "
+                        + "Cek apakah job SFTP sudah jalan hari ini.", cifNo, acctType, today);
+            }
 
             LocalDateTime now = LocalDateTime.now();
 
@@ -77,8 +86,8 @@ public class TradeService {
             dto.setLastUpdatedDateTime(now.format(DATETIME_FMT));
 
             long durationMs = System.currentTimeMillis() - start;
-            log.info("[TradeAcctStats] SUCCESS corpId={}, acctType={}, noOfAccounts={}, totalOutstandingBal={}, durationMs={}",
-                    corpId, acctType, dto.getNoOfAccounts(), dto.getTotalOutstandingBal(), durationMs);
+            log.info("[TradeAcctStats] SUCCESS cif={}, acctType={}, noOfAccounts={}, totalOutstandingBal={}, durationMs={}",
+                    cifNo, acctType, dto.getNoOfAccounts(), dto.getTotalOutstandingBal(), durationMs);
 
             ApiResponse<TradeAcctStatsDTO> apiResponse = new ApiResponse<>();
             apiResponse.setMsgBody(dto);
@@ -88,7 +97,7 @@ public class TradeService {
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - start;
             log.error("[TradeAcctStats] FAILED corpId={}, acctType={}, durationMs={}, error={}",
-                    corpId, acctType, durationMs, e.getMessage(), e);
+                    userAndCorp.getCorpId(), acctType, durationMs, e.getMessage(), e);
 
             ApiResponse<TradeAcctStatsDTO> apiResponse = new ApiResponse<>();
             apiResponse.setMsgBody(null);
@@ -114,13 +123,18 @@ public class TradeService {
         long start = System.currentTimeMillis();
         ApiResponse<TradeAcctListingDTO> apiResponse = new ApiResponse<>();
 
-        String corpId = StringUtils.hasText(req.getOpenTaggedCorpId()) ? req.getOpenTaggedCorpId() : userAndCorp.getCorpId();
         String acctType = tradeEnum.getAcctType();
 
-        log.info("[TradeAcctListing] START corpId={}, acctType={}, page={}, pageSize={}",
-                corpId, acctType, req.getPage(), req.getPageSize());
-
         try {
+            String targetCorpId = StringUtils.hasText(req.getOpenTaggedCorpId())
+                    ? req.getOpenTaggedCorpId()
+                    : userAndCorp.getCorpId();
+
+            String cifNo = corpCifResolver.resolveCif(targetCorpId);
+
+            log.info("[TradeAcctListing] START corpId={}, cif={}, acctType={}, page={}, pageSize={}",
+                    targetCorpId, cifNo, acctType, req.getPage(), req.getPageSize());
+
             LocalDate today = LocalDate.now();
             LocalDateTime startOfDay = today.atStartOfDay();
             LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
@@ -128,7 +142,7 @@ public class TradeService {
             Pageable pageable = PageRequest.of(req.getPage(), req.getPageSize());
 
             Page<DatamartListingProjection> resultPage = datamartAgreementRepository.getAccountListing(
-                    corpId, acctType, startOfDay, endOfDay, pageable
+                    cifNo, acctType, startOfDay, endOfDay, pageable
             );
 
             Page<TradeAcctListingSpDTO> mappedPage = resultPage.map(this::toListingDto);
@@ -136,22 +150,22 @@ public class TradeService {
             SearchCollectionResponse<TradeAcctListingSpDTO> result = new SearchCollectionResponse<>(mappedPage);
 
             TradeAcctListingDTO dto = new TradeAcctListingDTO();
-            dto.setCorpCifNo(req.getCorpCifNo());
+            dto.setCorpCifNo(cifNo);
             dto.setDatas(result);
 
             apiResponse.setMsgHeader(new ErrorResponse("0"));
             apiResponse.setMsgBody(dto);
 
             long durationMs = System.currentTimeMillis() - start;
-            log.info("[TradeAcctListing] SUCCESS corpId={}, acctType={}, page={}, totalRecords={}, durationMs={}",
-                    corpId, acctType, req.getPage(), result.getTotalRecordCount(), durationMs);
+            log.info("[TradeAcctListing] SUCCESS cif={}, acctType={}, page={}, totalRecords={}, durationMs={}",
+                    cifNo, acctType, req.getPage(), result.getTotalRecordCount(), durationMs);
 
             return apiResponse;
 
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - start;
             log.error("[TradeAcctListing] FAILED corpId={}, acctType={}, durationMs={}, error={}",
-                    corpId, acctType, durationMs, e.getMessage(), e);
+                    userAndCorp.getCorpId(), acctType, durationMs, e.getMessage(), e);
 
             apiResponse.setMsgHeader(new ErrorResponse("1"));
             apiResponse.setMsgBody(null);

@@ -1,5 +1,6 @@
 package com.m2e.dashboard.service.overview.AssetGraph;
 
+import com.m2e.dashboard.repository.CorpCIFRepository;
 import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.response.OverviewSubResDTO;
 import com.m2e.dashboard.enums.OvSubProductEnum;
@@ -8,7 +9,6 @@ import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
 import com.m2e.dashboard.model.Overview.AssetSnapshotEntity;
 import com.m2e.dashboard.dto.overview.Refactor.JobRunResultDTO;
 import com.m2e.dashboard.model.Trapi.Response.KursRateDTO;
-import com.m2e.dashboard.repository.CorpCifRepository;
 import com.m2e.dashboard.service.deposit.ca.Rest.BTSAccountClient;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
 import com.m2e.dashboard.service.overview.Refactor.CurrencyConverterService;
@@ -33,13 +33,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class AssetSnapshotJobService {
 
-    private final CorpCifRepository corpCifRepository;
     private final KursResolver kursResolver;
     private final CurrencyConverterService currencyConverterService;
     private final GraphCurrencyConverter graphConverter;
     private final DepositAccountMapper accountMapper;
     private final BTSAccountClient btsAccountClient;
     private final AssetSnapshotWriter writer;
+
+    private final CorpCIFRepository corpCifRepository;
 
     private static final String BTS_USER_ID = "1234";
     private static final String IDR = "IDR";
@@ -109,7 +110,7 @@ public class AssetSnapshotJobService {
         result.setKursValueDate(kursValueDate);
         log.info("[SNAPSHOT] Kurs source={} pairs={} valueDate={} age={}h",
                 kurs.getSource(), rateMap.size(), kursValueDate, kurs.getAgeHours());
-        List<String> cifList = corpCifRepository.findAllDistinctCif();
+        List<String> cifList = corpCifRepository.findAllCifNo();
         result.setTotalCif(cifList.size());
         log.info("[SNAPSHOT] {} distinct CIF to process", cifList.size());
 

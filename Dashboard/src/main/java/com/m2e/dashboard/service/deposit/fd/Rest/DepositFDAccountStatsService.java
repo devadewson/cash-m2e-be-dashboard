@@ -1,5 +1,6 @@
 package com.m2e.dashboard.service.deposit.fd.Rest;
 
+import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
@@ -17,8 +18,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -27,92 +33,68 @@ public class DepositFDAccountStatsService {
 
     private final BTSAccountClient btsAccountClient;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final CorpCifResolver corpCifResolver;
 
     private static final String REDIS_KEY_PREFIX = "deposit:fd:stats:";
-    private static final DecimalFormat FORMATTER = new DecimalFormat("#,##0.00");
+    private static final long CACHE_TTL_MINUTES = 15;
 
     public ApiResponse<DepositFDAcctStatsDTO> getDepositFDAccountStats(
-            UserAndCorp user,
-            DepositFDAcctStatsReqDTO req) {
+            UserAndCorp user, DepositFDAcctStatsReqDTO req) {
 
-        ApiResponse<DepositFDAcctStatsDTO> apiResponse = new ApiResponse<>();
-        DepositFDAcctStatsDTO depositFDAcctStatsDTO;
+        String cifNo = corpCifResolver.resolveCif(user.getCorpId());
+        String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + cifNo;
 
-        // CASE 1: NON REALTIME → REDIS
+        // CASE 1: non-realtime, ambil dari cache
         if (!Boolean.TRUE.equals(req.getRealTimeIndicator())) {
-            String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + user.getCorpId();
-
-            depositFDAcctStatsDTO = (DepositFDAcctStatsDTO) redisTemplate.opsForValue().get(redisKey);
-
-            if (depositFDAcctStatsDTO == null) {
-                depositFDAcctStatsDTO = createEmptyStats();
-            }
-
-            apiResponse.setMsgHeader(new ErrorResponse("0"));
-            apiResponse.setMsgBody(depositFDAcctStatsDTO);
-            return apiResponse;
+            DepositFDAcctStatsDTO cached = readFromCache(redisKey);
+            return success(cached != null ? cached : createEmptyStats());
         }
 
-        // CASE 2: REALTIME → BTS ONLY
+        // CASE 2: realtime, ambil dari BTS
         try {
-            SummaryResponse btsResp = btsAccountClient.getAccountSummary(
-                    buildBTSRequest(user)
-            );
+            SummaryResponse btsResp = btsAccountClient.getAccountSummary(buildBTSRequest(user, cifNo));
 
-            // Map BTS response ke DepositFDAcctStatsDTO
-            depositFDAcctStatsDTO = mapBtsToDepositFDStats(btsResp);
+            DepositFDAcctStatsDTO stats = mapBtsToDepositFDStats(btsResp, cifNo);
+            stats.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
+            stats.setLastUpdatedDate(DateTimeUtil.getTodayDate());
 
-            // Set timestamp realtime
-            depositFDAcctStatsDTO.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
-            depositFDAcctStatsDTO.setLastUpdatedDate(DateTimeUtil.getTodayDate());
-
-            // Simpan ke Redis untuk cache
-            String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + user.getCorpId();
-            redisTemplate.opsForValue().set(redisKey, depositFDAcctStatsDTO);
+            writeToCache(redisKey, stats);
+            return success(stats);
 
         } catch (Exception ex) {
-            log.error("BTS call failed for FD account stats", ex);
+            log.error("BTS call failed for FD account stats, cif={}", cifNo, ex);
 
-            // Fallback ke Redis jika BTS gagal
-            String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + user.getCorpId();
-            depositFDAcctStatsDTO = (DepositFDAcctStatsDTO) redisTemplate.opsForValue().get(redisKey);
-
-            if (depositFDAcctStatsDTO == null) {
-                depositFDAcctStatsDTO = createEmptyStats();
+            DepositFDAcctStatsDTO cached = readFromCache(redisKey);
+            if (cached != null) {
+                log.warn("Serving stale cached FD stats for cif={}", cifNo);
+                return success(cached);
             }
+            return failure("Data deposito tidak tersedia saat ini");
         }
-
-        apiResponse.setMsgHeader(new ErrorResponse("0"));
-        apiResponse.setMsgBody(depositFDAcctStatsDTO);
-        return apiResponse;
     }
 
-
-    private Summary buildBTSRequest(UserAndCorp user) {
+    private Summary buildBTSRequest(UserAndCorp user, String cifNo) {
         Summary req = new Summary();
         req.setUserId(user.getUserId());
-        req.setCif(user.getCorpId());
+        req.setCif(cifNo);
         req.setLocale("id_ID");
         req.setIndicator("R");
-
         return req;
     }
 
-    /**
-     * MAP BTS RESPONSE → DepositFDAcctStatsDTO
-     * Menghitung total sertifikat, total principal amount
-     */
-    private DepositFDAcctStatsDTO mapBtsToDepositFDStats(SummaryResponse response) {
-        DepositFDAcctStatsDTO statsDTO = new DepositFDAcctStatsDTO();
-
+    private DepositFDAcctStatsDTO mapBtsToDepositFDStats(SummaryResponse response, String cifNo) {
         if (response == null
                 || response.getResponseData() == null
                 || response.getResponseData().getAssetList() == null) {
+            log.warn("BTS response kosong untuk cif={}", cifNo);
             return createEmptyStats();
         }
 
         int accountCount = 0;
-        double totalPrincipal = 0.0;
+        int totalScanned = 0;
+        BigDecimal totalPrincipal = BigDecimal.ZERO;
+        String firstCurrency = null;
+        boolean mixedCurrency = false;
 
         List<SummaryCategory> categories = response.getResponseData().getAssetList();
 
@@ -121,39 +103,109 @@ public class DepositFDAccountStatsService {
                 continue;
             }
 
-            // Filter hanya produk FD (Fixed Deposit / Time Deposit)
-            List<SummaryProduct> fdProducts = category.getProductList().stream()
-                    .filter(p -> AcctTypEnum.TD.name().equalsIgnoreCase(p.getAccountType()))
-                    .toList();
+            for (SummaryProduct product : category.getProductList()) {
+                totalScanned++;
 
-            for (SummaryProduct product : fdProducts) {
+                // TODO hapus setelah nilai accountType terverifikasi
+                log.info("BTS product: accountType=[{}] accNo=[{}] currency=[{}] amount=[{}]",
+                        product.getAccountType(), product.getAccNo(),
+                        product.getCurrencyCodeIso(), product.getAmount());
+
+                if (!isFixedDeposit(product.getAccountType())) {
+                    continue;
+                }
+
                 accountCount++;
 
-                // Parse amount string ke double
-                try {
-                    String amountStr = product.getAmount();
-                    if (amountStr != null && !amountStr.isEmpty()) {
-                        amountStr = amountStr.replaceAll(",", "");
-                        double amount = Double.parseDouble(amountStr);
-                        totalPrincipal += amount;
-                    }
-                } catch (NumberFormatException e) {
-                    log.warn("Failed to parse amount for account: {}", product.getAccNo(), e);
+                String currency = product.getCurrencyCodeIso();
+                if (firstCurrency == null) {
+                    firstCurrency = currency;
+                } else if (currency != null && !firstCurrency.equalsIgnoreCase(currency)) {
+                    mixedCurrency = true;
                 }
+
+                totalPrincipal = totalPrincipal.add(
+                        parseAmount(product.getAmount(), product.getAccNo()));
             }
         }
 
-        // Set hasil perhitungan sesuai field FD DTO
+        if (mixedCurrency) {
+            log.error("MIXED CURRENCY pada FD stats cif={}. Total dijumlah mentah tanpa konversi.", cifNo);
+        }
+        if (accountCount == 0 && totalScanned > 0) {
+            log.warn("cif={}: {} rekening di-scan, tidak ada yang bertipe {}. Cek nilai accountType dari BTS.",
+                    cifNo, totalScanned, AcctTypEnum.TD.name());
+        }
+
+        DepositFDAcctStatsDTO statsDTO = new DepositFDAcctStatsDTO();
         statsDTO.setNumberOfAcct(String.valueOf(accountCount));
         statsDTO.setTotalOfCertificates(String.valueOf(accountCount));
-        statsDTO.setConsolidatedPrincipalAmt(FORMATTER.format(totalPrincipal));
-
+        statsDTO.setConsolidatedPrincipalAmt(format(totalPrincipal));
         return statsDTO;
     }
 
-    /**
-     * CREATE EMPTY STATS (DEFAULT)
-     */
+    private boolean isFixedDeposit(String acctType) {
+        return acctType != null
+                && AcctTypEnum.TD.name().equalsIgnoreCase(acctType.trim());
+    }
+
+    private BigDecimal parseAmount(String value, String acctNo) {
+        if (value == null || value.trim().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        try {
+            return new BigDecimal(value.replace(",", "").trim());
+        } catch (NumberFormatException e) {
+            log.warn("Gagal parse amount [{}] untuk rekening {}", value, acctNo);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /** DecimalFormat tidak thread-safe, jadi dibuat baru tiap pemanggilan. */
+    private String format(BigDecimal value) {
+        DecimalFormat formatter = new DecimalFormat("#,##0.00",
+                DecimalFormatSymbols.getInstance(Locale.US));
+        return formatter.format(value.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private DepositFDAcctStatsDTO readFromCache(String redisKey) {
+        try {
+            Object cached = redisTemplate.opsForValue().get(redisKey);
+            if (cached instanceof DepositFDAcctStatsDTO dto) {
+                return dto;
+            }
+            if (cached != null) {
+                log.warn("Cache type mismatch untuk key {}: {}", redisKey, cached.getClass().getName());
+                redisTemplate.delete(redisKey);
+            }
+        } catch (Exception e) {
+            log.warn("Gagal baca cache {}: {}", redisKey, e.getMessage());
+        }
+        return null;
+    }
+
+    private void writeToCache(String redisKey, DepositFDAcctStatsDTO stats) {
+        try {
+            redisTemplate.opsForValue().set(redisKey, stats, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.warn("Gagal simpan cache {}: {}", redisKey, e.getMessage());
+        }
+    }
+
+    private ApiResponse<DepositFDAcctStatsDTO> success(DepositFDAcctStatsDTO body) {
+        ApiResponse<DepositFDAcctStatsDTO> res = new ApiResponse<>();
+        res.setMsgHeader(new ErrorResponse("0"));
+        res.setMsgBody(body);
+        return res;
+    }
+
+    private ApiResponse<DepositFDAcctStatsDTO> failure(String message) {
+        log.warn("Returning error response: {}", message);
+        ApiResponse<DepositFDAcctStatsDTO> res = new ApiResponse<>();
+        res.setMsgHeader(new ErrorResponse("99"));
+        return res;
+    }
+
     private DepositFDAcctStatsDTO createEmptyStats() {
         DepositFDAcctStatsDTO emptyStats = new DepositFDAcctStatsDTO();
         emptyStats.setNumberOfAcct("0");
