@@ -1,18 +1,16 @@
 package com.m2e.dashboard.service.overview.AssetGraph;
 
-
 import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
+import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.request.AssetLiabilitiesGraphReqDTO;
 import com.m2e.dashboard.dto.overview.response.AssetLiabilitiesGraphResDTO;
 import com.m2e.dashboard.dto.overview.response.AssetLiabilitiesGraphSubResDTO;
 import com.m2e.dashboard.model.Overview.AssetSnapshotEntity;
-import com.m2e.dashboard.model.Trapi.Response.KursAllResponse;
 import com.m2e.dashboard.repository.AssetSnapshotRepository;
-import com.m2e.dashboard.service.overview.Refactor.CurrencyConverterService;
-import com.m2e.dashboard.service.overview.Refactor.KursService;
+import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,11 +31,11 @@ import java.util.function.Function;
 public class AssetGraphService {
 
     private final AssetSnapshotRepository repository;
-    private final KursService kursService;
-    private final CurrencyConverterService currencyConverterService;
+    private final KursResolver kursResolver;
     private final GraphCurrencyConverter graphConverter;
     private final CorpCifResolver corpCifResolver;
 
+    private static final String IDR = "IDR";
     private static final int WEEK_COUNT = 8;
     private static final int MONTH_COUNT = 12;
     private static final int QUARTER_COUNT = 8;
@@ -46,9 +44,14 @@ public class AssetGraphService {
     public ApiResponse<AssetLiabilitiesGraphResDTO> getAssetGraph(
             UserAndCorp userAndCorp, AssetLiabilitiesGraphReqDTO request) {
 
+        if (request.getInterval() == null) {
+            log.warn("[GRAPH] Interval kosong");
+            return errorResponse("Interval wajib diisi (W, M, atau Q)");
+        }
+
         String cif = corpCifResolver.resolveCif(userAndCorp.getCorpId());
-        String targetCurrency = request.getBaseCurrency() != null
-                ? request.getBaseCurrency().toUpperCase() : "IDR";
+        String targetCurrency = (request.getBaseCurrency() != null && !request.getBaseCurrency().isBlank())
+                ? request.getBaseCurrency().trim().toUpperCase() : IDR;
 
         log.info("[GRAPH] cif={} interval={} currency={}",
                 cif, request.getInterval(), targetCurrency);
@@ -73,26 +76,35 @@ public class AssetGraphService {
                 keyExtractor = AssetSnapshotEntity::getQuarterKey;
                 fromDate = LocalDate.now().minusMonths(QUARTER_COUNT * 3L);
             }
-            default -> throw new IllegalArgumentException(
-                    "Invalid interval: " + request.getInterval());
+            default -> {
+                log.warn("[GRAPH] Interval tidak dikenal: {}", request.getInterval());
+                return errorResponse("Invalid interval: " + request.getInterval());
+            }
         }
 
         List<AssetSnapshotEntity> rows = repository.findForGraph(cif, fromDate);
 
-        // Ambil posisi terakhir per periode (rows ORDER BY snapshotDate ASC)
+        if (rows.isEmpty()) {
+            log.warn("[GRAPH] Tidak ada snapshot untuk cif={} sejak {}. "
+                    + "Cek apakah job snapshot sudah jalan.", cif, fromDate);
+        }
+
+        // Posisi terakhir per periode (rows sudah ORDER BY snapshotDate ASC)
         Map<String, AssetSnapshotEntity> lastPerPeriod = new LinkedHashMap<>();
         for (AssetSnapshotEntity row : rows) {
             lastPerPeriod.put(keyExtractor.apply(row), row);
         }
 
         Map<String, BigDecimal> rateMap = Map.of();
-        if (!"IDR".equals(targetCurrency)) {
-            KursAllResponse kurs = kursService.getKursAll();
-            if (kurs == null || kurs.getRespData() == null) {
-                log.error("[GRAPH] Kurs unavailable for target {}", targetCurrency);
+        if (!IDR.equals(targetCurrency)) {
+            KursResolution kurs = kursResolver.resolve();
+            if (kurs == null) {
+                log.error("[GRAPH] Kurs tidak tersedia dari Trapi maupun DB, target={}", targetCurrency);
                 return errorResponse("Exchange rate unavailable");
             }
-            rateMap = currencyConverterService.buildRateMap(kurs.getRespData());
+            rateMap = kurs.getRateMap();
+            log.info("[GRAPH] Kurs source={} pairs={} age={}h",
+                    kurs.getSource(), rateMap.size(), kurs.getAgeHours());
         }
 
         List<AssetLiabilitiesGraphSubResDTO> points = new ArrayList<>();
@@ -106,7 +118,7 @@ public class AssetGraphService {
             BigDecimal liab = graphConverter.fromIdr(row.getTotalLiabilities(), targetCurrency, rateMap);
 
             if (asset == null || liab == null) {
-                log.error("[GRAPH] Conversion failed IDR->{}", targetCurrency);
+                log.error("[GRAPH] Konversi gagal IDR -> {} untuk periode {}", targetCurrency, periodKey);
                 return errorResponse("Exchange rate not available for " + targetCurrency);
             }
 
@@ -116,6 +128,9 @@ public class AssetGraphService {
             point.setLiabilities(liab);
             points.add(point);
         }
+
+        log.info("[GRAPH] cif={} interval={} -> {} titik dari {} periode diminta",
+                cif, request.getInterval(), points.size(), periodKeys.size());
 
         AssetLiabilitiesGraphResDTO body = new AssetLiabilitiesGraphResDTO();
         body.setAssetGraph(points);

@@ -1,7 +1,7 @@
 package com.m2e.dashboard.repository;
 
 import com.m2e.dashboard.dto.trade.DatamartListingProjection;
-import com.m2e.dashboard.dto.trade.TradeAcctStatsProjection;
+import com.m2e.dashboard.dto.trade.TradeAcctStatsByCurrencyProjection;
 import com.m2e.dashboard.model.DataMart.DatamartAgreement;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,22 +10,25 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public interface DatamartAgreementRepository extends JpaRepository<DatamartAgreement, Long> {
 
     @Query("""
-        SELECT new com.m2e.dashboard.dto.trade.TradeAcctStatsProjection(
+        SELECT new com.m2e.dashboard.dto.trade.TradeAcctStatsByCurrencyProjection(
+            d.currency,
             COUNT(d.id),
             COALESCE(SUM(d.outstandingAmount), 0)
         )
         FROM DatamartAgreement d
-        WHERE d.facility = :corpId
+        WHERE d.facility = :cifNo
           AND d.productType = :acctType
           AND d.processDate >= :startOfDay
           AND d.processDate < :endOfDay
+        GROUP BY d.currency
         """)
-    TradeAcctStatsProjection getAccountStats(
-            @Param("corpId") String corpId,
+    List<TradeAcctStatsByCurrencyProjection> getAccountStats(
+            @Param("cifNo") String cifNo,
             @Param("acctType") String acctType,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay
@@ -46,13 +49,13 @@ public interface DatamartAgreementRepository extends JpaRepository<DatamartAgree
                d.applicant AS applicant,
                d.issuingBank AS issuingBank
         FROM DatamartAgreement d
-        WHERE d.facility = :corpId
+        WHERE d.facility = :cifNo
           AND d.productType = :acctType
           AND d.processDate >= :startOfDay
           AND d.processDate < :endOfDay
         """)
     Page<DatamartListingProjection> getAccountListing(
-            @Param("corpId") String corpId,
+            @Param("cifNo") String cifNo,
             @Param("acctType") String acctType,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay,

@@ -6,7 +6,6 @@ import com.m2e.dashboard.model.Overview.KursHistoryEntity;
 import com.m2e.dashboard.model.Trapi.Response.KursAllResponse;
 import com.m2e.dashboard.model.Trapi.Response.KursRateDTO;
 import com.m2e.dashboard.repository.KursHistoryRepository;
-import com.m2e.dashboard.service.overview.AssetGraph.GraphKursClient;
 import com.m2e.dashboard.service.overview.Refactor.CurrencyConverterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

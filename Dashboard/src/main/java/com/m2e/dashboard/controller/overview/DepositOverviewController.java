@@ -51,8 +51,7 @@ public class DepositOverviewController {
 
         OverviewResDTO result = depositOverviewService.getDepositOverview(
                 userAndCorp,
-                request.getBaseCurrency(),
-                request.getCorpCifNo());
+                request.getBaseCurrency());
 
         return ResponseEntity.status(HttpStatus.OK)
                 .body(new com.m2e.dashboard.dto.common.ApiResponse<>(
@@ -75,8 +74,7 @@ public class DepositOverviewController {
 
         ApiResponse<AssetLiabilitiesResDTO> response = depositOverviewService.getDepositAssetLiabilities(
                 userAndCorp,
-                request.getBaseCurrency(),
-                request.getCorpCifNo());
+                request.getBaseCurrency());
 
         return ResponseEntity.status(HttpStatus.OK).body(response);
     }

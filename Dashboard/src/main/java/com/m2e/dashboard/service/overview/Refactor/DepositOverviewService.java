@@ -1,17 +1,20 @@
 package com.m2e.dashboard.service.overview.Refactor;
 
+import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.deposit.ca.response.DepositAcctListingDTO;
+import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.response.AssetLiabilitiesResDTO;
 import com.m2e.dashboard.dto.overview.response.OverviewResDTO;
 import com.m2e.dashboard.dto.overview.response.OverviewSubResDTO;
 import com.m2e.dashboard.enums.OvSubProductEnum;
 import com.m2e.dashboard.enums.OverviewEnum;
-import com.m2e.dashboard.model.Trapi.Response.KursAllResponse;
 import com.m2e.dashboard.service.deposit.ca.Rest.DepositAllAccountListService;
+import com.m2e.dashboard.service.overview.AssetGraph.GraphCurrencyConverter;
+import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
 import com.m2e.dashboard.sp.deposit.ca.response.DepositAcctSummarySpDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,17 +26,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Service untuk deposit overview dengan currency conversion.
+ * Service untuk deposit overview.
  *
- * Flow:
- * 1. Fetch kurs dari Redis (via KursService)
- * 2. Fetch akun dari BTS (via DepositAllAccountListService)
- * 3. Map akun ke DTO (via DepositAccountMapper)
- * 4. Konversi amount ke target currency (via CurrencyConverterService)
- * 5. Agregasi & return response
+ * Listing (/overview, /overview/{subProduct})
+ *
+ * Summary (/asset) menjumlahkan seluruh rekening, jadi wajib dikonversi
+ * ke satu currency sebelum diagregasi.
  */
 @Slf4j
 @Service
@@ -41,63 +43,65 @@ import java.util.stream.Collectors;
 public class DepositOverviewService {
 
     private final DepositAllAccountListService depositAllAccountListService;
-    private final KursService kursService;
-    private final CurrencyConverterService currencyConverter;
+    private final KursResolver kursResolver;
+    private final GraphCurrencyConverter graphConverter;
     private final DepositAccountMapper accountMapper;
+    private final CorpCifResolver corpCifResolver;
 
+    private static final String IDR = "IDR";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
-    private static final DateTimeFormatter DATETIME_FORMAT = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm:ss '(GMT+8)'");
+    private static final DateTimeFormatter DATETIME_FORMAT =
+            DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm:ss '(GMT+8)'");
 
     /**
-     * Get all deposit accounts with converted amounts.
+     * Get all deposit accounts.
      */
-    public OverviewResDTO getDepositOverview(UserAndCorp userAndCorp, String baseCurrency, String corpCifNo) {
-        log.info("=== DepositOverviewService.getDepositOverview START ===");
-        log.info("User: {}, Corp: {}, CIF: {}, Target Currency: {}",
-                userAndCorp.getUserId(), userAndCorp.getCorpId(), corpCifNo, baseCurrency);
+    public OverviewResDTO getDepositOverview(UserAndCorp userAndCorp, String baseCurrency) {
+
+        String corpCifNo = corpCifResolver.resolveCif(userAndCorp.getCorpId());
+
+        log.info("=== getDepositOverview START | user={} corpId={} cif={} ===",
+                userAndCorp.getUserId(), userAndCorp.getCorpId(), corpCifNo);
 
         OverviewResDTO overviewResDto = new OverviewResDTO();
         overviewResDto.setId(OverviewEnum.DEPOSIT.name());
         overviewResDto.setTitle(OverviewEnum.DEPOSIT.getDescription());
         overviewResDto.setProductAccType(OverviewEnum.DEPOSIT.getTab());
 
-        String targetCurrency = (baseCurrency != null) ? baseCurrency : "IDR";
+        List<OverviewSubResDTO> accounts =
+                new ArrayList<>(fetchAccountsRaw(userAndCorp, corpCifNo));
 
-        // Fetch & convert accounts
-        List<OverviewSubResDTO> convertedAccounts = fetchAndConvertAccounts(userAndCorp, corpCifNo, targetCurrency);
-
-        convertedAccounts.sort(null);
-        overviewResDto.setAccount(convertedAccounts);
+        accounts.sort(null);
+        overviewResDto.setAccount(accounts);
         overviewResDto.setLastUpdatedDate(OffsetDateTime.now().format(DATE_FORMAT));
 
-        logDepositSummary(convertedAccounts, targetCurrency);
+        log.info("=== getDepositOverview END | cif={} accounts={} ===", corpCifNo, accounts.size());
         return overviewResDto;
     }
 
     /**
-     * Get deposit asset & liabilities summary with converted amounts.
+     * Get deposit asset & liabilities summary. Seluruh rekening dikonversi
+     * ke targetCurrency sebelum dijumlah.
      */
     public ApiResponse<AssetLiabilitiesResDTO> getDepositAssetLiabilities(
-            UserAndCorp userAndCorp, String baseCurrency, String corpCifNo) {
+            UserAndCorp userAndCorp, String baseCurrency) {
 
-        log.info("=== DepositOverviewService.getDepositAssetLiabilities START ===");
+        String corpCifNo = corpCifResolver.resolveCif(userAndCorp.getCorpId());
+        String targetCurrency = resolveTargetCurrency(baseCurrency);
+
+        log.info("=== getDepositAssetLiabilities START | cif={} currency={} ===",
+                corpCifNo, targetCurrency);
 
         ApiResponse<AssetLiabilitiesResDTO> apiResponse = new ApiResponse<>();
         AssetLiabilitiesResDTO result = new AssetLiabilitiesResDTO();
-
-        String targetCurrency = (baseCurrency != null) ? baseCurrency : "IDR";
         result.setCurrency(targetCurrency);
 
-        // 1. Fetch & convert all accounts
-        List<OverviewSubResDTO> convertedAccounts = fetchAndConvertAccounts(userAndCorp, corpCifNo, targetCurrency);
+        List<OverviewSubResDTO> convertedAccounts =
+                fetchAndConvertAccounts(userAndCorp, corpCifNo, targetCurrency);
 
-        // 2. Aggregate by sub-product
         aggregateBySubProduct(result, convertedAccounts);
-
-        // 3. Deposits are pure assets, zero out all liabilities
         zeroOutAllLiabilities(result);
 
-        // 4. Calculate total asset & ratios
         BigDecimal totalAsset = result.getTotalCA()
                 .add(result.getTotalMFCA())
                 .add(result.getTotalFCA())
@@ -113,39 +117,35 @@ public class DepositOverviewService {
         result.setWorkingRatio(BigDecimal.ZERO);
         result.setQuickRatio(BigDecimal.ZERO);
 
-        // 5. Last updated date
-        OffsetDateTime lastUpdate = OffsetDateTime.now().minusDays(1);
-        result.setLastUpdatedDate(lastUpdate.format(DATETIME_FORMAT));
+        result.setLastUpdatedDate(OffsetDateTime.now().minusDays(1).format(DATETIME_FORMAT));
 
         apiResponse.setMsgBody(result);
         apiResponse.setMsgHeader(new ErrorResponse("0"));
 
-        log.info("=== DepositOverviewService.getDepositAssetLiabilities END ===");
-        log.info("Total Asset ({}): {}", targetCurrency, totalAsset);
+        log.info("=== getDepositAssetLiabilities END | cif={} totalAsset={} {} ===",
+                corpCifNo, totalAsset, targetCurrency);
 
         return apiResponse;
     }
 
     /**
-     * Get detail overview for a specific deposit sub-type with converted amounts.
+     * Get detail overview untuk satu sub-type.
      */
     public OverviewResDTO getDepositSubTypeOverview(
-            UserAndCorp userAndCorp, OvSubProductEnum subProduct, String baseCurrency, String corpCifNo) {
+            UserAndCorp userAndCorp, OvSubProductEnum subProduct, String baseCurrency) {
 
-        log.info("=== getDepositSubTypeOverview: {} ===", subProduct);
+        String corpCifNo = corpCifResolver.resolveCif(userAndCorp.getCorpId());
+
+        log.info("=== getDepositSubTypeOverview: {} | cif={} ===", subProduct, corpCifNo);
 
         OverviewResDTO overviewResDto = new OverviewResDTO();
         overviewResDto.setId(subProduct.name());
         overviewResDto.setTitle(getSubProductTitle(subProduct));
         overviewResDto.setProductAccType("assets");
 
-        String targetCurrency = (baseCurrency != null) ? baseCurrency : "IDR";
+        List<OverviewSubResDTO> accounts = fetchAccountsRaw(userAndCorp, corpCifNo);
 
-        // Fetch & convert accounts
-        List<OverviewSubResDTO> convertedAccounts = fetchAndConvertAccounts(userAndCorp, corpCifNo, targetCurrency);
-
-        // Filter by subProduct
-        List<OverviewSubResDTO> filteredAccounts = convertedAccounts.stream()
+        List<OverviewSubResDTO> filteredAccounts = accounts.stream()
                 .filter(a -> a.getSubProduct() == subProduct)
                 .collect(Collectors.toList());
 
@@ -153,148 +153,130 @@ public class DepositOverviewService {
         overviewResDto.setAccount(filteredAccounts);
         overviewResDto.setLastUpdatedDate(OffsetDateTime.now().format(DATE_FORMAT));
 
-        log.info("SubType {} - {} accounts found (in {})", subProduct, filteredAccounts.size(), targetCurrency);
+        log.info("SubType {} - {} accounts found | cif={}",
+                subProduct, filteredAccounts.size(), corpCifNo);
         return overviewResDto;
     }
 
+    // ==================== PRIVATE ====================
+
+    private String resolveTargetCurrency(String baseCurrency) {
+        return (baseCurrency != null && !baseCurrency.isBlank())
+                ? baseCurrency.trim().toUpperCase() : IDR;
+    }
 
     /**
-     * Fetch accounts from BTS, map, and convert to target currency.
+     * Ambil akun dari BTS lalu map ke DTO. Tanpa konversi currency.
+     */
+    private List<OverviewSubResDTO> fetchAccountsRaw(UserAndCorp userAndCorp, String corpCifNo) {
+        List<DepositAcctSummarySpDTO> btsAccounts = fetchRawBtsAccounts(userAndCorp, corpCifNo);
+
+        if (btsAccounts.isEmpty()) {
+            log.warn("No accounts fetched from BTS | cif={}", corpCifNo);
+            return new ArrayList<>();
+        }
+
+        log.info("Fetched {} accounts from BTS | cif={}", btsAccounts.size(), corpCifNo);
+        return new ArrayList<>(accountMapper.mapAll(btsAccounts));
+    }
+
+    /**
+     * Ambil akun dari BTS lalu konversi seluruhnya ke targetCurrency.
      */
     private List<OverviewSubResDTO> fetchAndConvertAccounts(
             UserAndCorp userAndCorp, String corpCifNo, String targetCurrency) {
 
         try {
-            // Step 1: Fetch kurs from Redis
-            log.info("Step 1: Fetching kurs from Redis...");
-            KursAllResponse kursResponse = kursService.getKursAll();
+            KursResolution kurs = kursResolver.resolve();
 
-            if (kursResponse == null || kursResponse.getRespData() == null) {
-                log.warn("Kurs data not available, returning accounts without conversion");
-                return fetchRawAccounts(userAndCorp, corpCifNo);
+            if (kurs == null) {
+                log.error("FALLBACK: kurs tidak tersedia dari Trapi maupun DB | cif={}. "
+                        + "Total lintas currency TIDAK VALID.", corpCifNo);
+                return fetchAccountsRaw(userAndCorp, corpCifNo);
             }
 
-            // Step 2: Build rate map
-            log.info("Step 2: Building rate map...");
-            Map<String, BigDecimal> rateMap = currencyConverter.buildRateMap(kursResponse.getRespData());
+            Map<String, BigDecimal> rateMap = kurs.getRateMap();
+            log.info("Kurs source={} pairs={} age={}h",
+                    kurs.getSource(), rateMap.size(), kurs.getAgeHours());
 
-            // Step 3: Fetch raw accounts from BTS
-            log.info("Step 3: Fetching accounts from BTS...");
-            List<DepositAcctSummarySpDTO> btsAccounts = fetchRawBtsAccounts(userAndCorp, corpCifNo);
-
-            if (btsAccounts.isEmpty()) {
-                log.warn("No accounts fetched from BTS");
-                return List.of();
+            List<OverviewSubResDTO> mappedAccounts = fetchAccountsRaw(userAndCorp, corpCifNo);
+            if (mappedAccounts.isEmpty()) {
+                return mappedAccounts;
             }
 
-            // Step 4: Map to DTO
-            log.info("Step 4: Mapping {} accounts to DTO...", btsAccounts.size());
-            List<OverviewSubResDTO> mappedAccounts = accountMapper.mapAll(btsAccounts);
+            List<OverviewSubResDTO> convertedAccounts =
+                    convertAllAccounts(mappedAccounts, targetCurrency, rateMap);
 
-            // Step 5: Convert all amounts
-            log.info("Step 5: Converting amounts to {}...", targetCurrency);
-            List<OverviewSubResDTO> convertedAccounts = convertAllAccounts(mappedAccounts, targetCurrency, rateMap);
-
-            log.info("Step 6: Done! {} accounts converted to {}", convertedAccounts.size(), targetCurrency);
+            log.info("Converted {} accounts to {} | cif={}",
+                    convertedAccounts.size(), targetCurrency, corpCifNo);
             return convertedAccounts;
 
         } catch (Exception e) {
-            log.error("Error in fetchAndConvertAccounts: {}", e.getMessage(), e);
-            // Fallback: return raw accounts without conversion
-            return fetchRawAccounts(userAndCorp, corpCifNo);
+            log.error("Error in fetchAndConvertAccounts | cif={}: {}", corpCifNo, e.getMessage(), e);
+            return fetchAccountsRaw(userAndCorp, corpCifNo);
         }
     }
 
-    /**
-     * Fetch raw BTS accounts without mapping.
-     */
     private List<DepositAcctSummarySpDTO> fetchRawBtsAccounts(UserAndCorp userAndCorp, String corpCifNo) {
         try {
             AccountListReq req = createAccountListRequest(corpCifNo);
-            ApiResponse<DepositAcctListingDTO> response = depositAllAccountListService.getAllAccounts(userAndCorp, req);
+            ApiResponse<DepositAcctListingDTO> response =
+                    depositAllAccountListService.getAllAccounts(userAndCorp, req);
 
             if (response.getMsgBody() != null && response.getMsgBody().getDatas() != null) {
                 return response.getMsgBody().getDatas().getData();
             }
         } catch (Exception e) {
-            log.error("Error fetching raw BTS accounts: {}", e.getMessage(), e);
+            log.error("Error fetching BTS accounts | cif={}: {}", corpCifNo, e.getMessage(), e);
         }
-        return List.of();
+        return new ArrayList<>();
     }
 
-    /**
-     * Fallback: fetch raw accounts without conversion (existing behavior).
-     */
-    private List<OverviewSubResDTO> fetchRawAccounts(UserAndCorp userAndCorp, String corpCifNo) {
-        List<OverviewSubResDTO> result = new ArrayList<>();
-        try {
-            AccountListReq req = createAccountListRequest(corpCifNo);
-            ApiResponse<DepositAcctListingDTO> response = depositAllAccountListService.getAllAccounts(userAndCorp, req);
-
-            if (response.getMsgBody() != null && response.getMsgBody().getDatas() != null) {
-                List<DepositAcctSummarySpDTO> btsAccounts = response.getMsgBody().getDatas().getData();
-                log.info("Fetched {} accounts from BTS (without conversion)", btsAccounts.size());
-                return accountMapper.mapAll(btsAccounts);
-            }
-        } catch (Exception e) {
-            log.error("Error fetching all accounts from BTS: {}", e.getMessage());
-        }
-        return result;
-    }
-
-    /**
-     * Convert all accounts to target currency.
-     */
     private List<OverviewSubResDTO> convertAllAccounts(
-            List<OverviewSubResDTO> accounts,
-            String targetCurrency,
+            List<OverviewSubResDTO> accounts, String targetCurrency,
             Map<String, BigDecimal> rateMap) {
 
-        return accounts.stream()
+        List<OverviewSubResDTO> converted = accounts.stream()
                 .map(account -> convertSingleAccount(account, targetCurrency, rateMap))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+
+        if (converted.size() < accounts.size()) {
+            log.error("{} dari {} rekening gagal dikonversi ke {}. Total tidak lengkap.",
+                    accounts.size() - converted.size(), accounts.size(), targetCurrency);
+        }
+        return converted;
     }
 
     /**
-     * Convert single account to target currency.
+     * Konversi satu rekening. Null kalau rate tidak ditemukan
      */
     private OverviewSubResDTO convertSingleAccount(
-            OverviewSubResDTO account,
-            String targetCurrency,
-            Map<String, BigDecimal> rateMap) {
+            OverviewSubResDTO account, String targetCurrency, Map<String, BigDecimal> rateMap) {
 
         String originalCurrency = account.getCurrency();
-        BigDecimal originalAmount = account.getTotalAmount() != null ?
-                account.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal originalAmount = account.getTotalAmount() != null
+                ? account.getTotalAmount() : BigDecimal.ZERO;
 
-        if (originalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            // Zero amount, just update currency label
+        if (originalAmount.signum() == 0) {
             account.setCurrency(targetCurrency);
             return account;
         }
 
-        // Convert amount
-        BigDecimal convertedAmount = currencyConverter.convert(
-                originalAmount,
-                originalCurrency,
-                targetCurrency,
-                rateMap
-        );
+        BigDecimal convertedAmount = graphConverter.convert(
+                originalAmount, originalCurrency, targetCurrency, rateMap);
 
-        // Update account
+        if (convertedAmount == null) {
+            log.error("Gagal konversi {} {} -> {} untuk rekening [{}]. Rekening dilewati.",
+                    originalAmount, originalCurrency, targetCurrency, account.getLabel());
+            return null;
+        }
+
         account.setTotalAmount(convertedAmount);
         account.setCurrency(targetCurrency);
-
-        log.debug("Converted: {} {} → {} {}",
-                originalAmount, originalCurrency,
-                convertedAmount, targetCurrency);
-
         return account;
     }
 
-    /**
-     * Aggregate converted accounts by sub-product.
-     */
     private void aggregateBySubProduct(AssetLiabilitiesResDTO result, List<OverviewSubResDTO> accounts) {
         BigDecimal totalCA = BigDecimal.ZERO;
         BigDecimal totalSA = BigDecimal.ZERO;
@@ -307,15 +289,21 @@ public class DepositOverviewService {
 
         for (OverviewSubResDTO acc : accounts) {
             BigDecimal amount = acc.getTotalAmount() != null ? acc.getTotalAmount() : BigDecimal.ZERO;
+            OvSubProductEnum sub = acc.getSubProduct();
 
-            switch (acc.getSubProduct()) {
-                case CA:   totalCA = totalCA.add(amount); break;
-                case SA:   totalSA = totalSA.add(amount); break;
+            if (sub == null) {
+                totalOther = totalOther.add(amount);
+                continue;
+            }
+
+            switch (sub) {
+                case CA:   totalCA   = totalCA.add(amount);   break;
+                case SA:   totalSA   = totalSA.add(amount);   break;
                 case MFCA: totalMFCA = totalMFCA.add(amount); break;
-                case FCA:  totalFCA = totalFCA.add(amount); break;
-                case FD:   totalFD = totalFD.add(amount); break;
-                case TD:   totalTD = totalTD.add(amount); break;
-                case VA:   totalVA = totalVA.add(amount); break;
+                case FCA:  totalFCA  = totalFCA.add(amount);  break;
+                case FD:   totalFD   = totalFD.add(amount);   break;
+                case TD:   totalTD   = totalTD.add(amount);   break;
+                case VA:   totalVA   = totalVA.add(amount);   break;
                 default:   totalOther = totalOther.add(amount); break;
             }
         }
@@ -371,20 +359,5 @@ public class DepositOverviewService {
             case DEPOSIT: return "All Deposits";
             default: return "Deposit Accounts";
         }
-    }
-
-    private void logDepositSummary(List<OverviewSubResDTO> accounts, String targetCurrency) {
-        log.info("=== Deposit Overview Summary (in {}) ===", targetCurrency);
-        log.info("Total accounts: {}", accounts.size());
-        accounts.stream()
-                .collect(Collectors.groupingBy(
-                        OverviewSubResDTO::getSubProduct,
-                        Collectors.summarizingDouble(a -> a.getTotalAmount() != null ?
-                                a.getTotalAmount().doubleValue() : 0)
-                ))
-                .forEach((subProduct, summary) ->
-                        log.info("  {} : {} accounts | Total: {} {}",
-                                subProduct, summary.getCount(), summary.getSum(), targetCurrency));
-        log.info("========================================");
     }
 }

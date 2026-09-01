@@ -4,6 +4,7 @@ import com.m2e.dashboard.auth.JwtUtil;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
+import com.m2e.dashboard.dto.trade.request.TradeAcctStatsReqDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctListingDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;
 import com.m2e.dashboard.enums.TradeEnum;
@@ -34,14 +35,11 @@ public class GuaranteeSBLCController {
     )
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
-            (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-//        String userId = "0012966576";
-//        String corpId = "0012966576";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
-      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.GUARANTEE));
+            (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody TradeAcctStatsReqDTO reqStats) {
+
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        String baseCurrency = (reqStats != null) ? reqStats.getBaseCurrency() : null;
+        return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.GUARANTEE,baseCurrency));
     }
 
     @Operation(

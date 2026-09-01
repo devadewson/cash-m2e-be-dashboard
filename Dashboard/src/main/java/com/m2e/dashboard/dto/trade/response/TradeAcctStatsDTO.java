@@ -10,4 +10,5 @@ public class TradeAcctStatsDTO implements Serializable {
     private String totalOutstandingBal;
     private String lastUpdatedDate;
     private String lastUpdatedDateTime;
+    private String baseCurrency;
 }

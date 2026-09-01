@@ -9,7 +9,10 @@ public class DepositAcctStatsDTO implements BaseESBMetadata {
     private String numberOfAcct;
     private String totalLedgerBal;
     private String totalAvailableBal;
+    private String currency;
     private String lastUpdatedDate;
     private String lastUpdatedDateTime;
     private ESBMetadataDTO esbMetadata;
+
+
 }

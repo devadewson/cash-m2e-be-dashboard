@@ -4,6 +4,7 @@ import com.m2e.dashboard.auth.JwtUtil;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
+import com.m2e.dashboard.dto.trade.request.TradeAcctStatsReqDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctListingDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;
 import com.m2e.dashboard.enums.TradeEnum;
@@ -32,16 +33,13 @@ public class IncomingColectionController {
     )
     @PostMapping("/acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-//        String userId = "LCUS-NYTCOMCO";
-//        String corpId = "LCUS-NYTCOMCO";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody TradeAcctStatsReqDTO reqStats) {
+
         UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        String baseCurrency = (reqStats != null) ? reqStats.getBaseCurrency() : null;
         log.info("[IncomingColection] getAccountStats called");
         return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp,
-                TradeEnum.INCOMING_COLLECTION));
+                TradeEnum.INCOMING_COLLECTION,baseCurrency));
     }
 
     @Operation(

@@ -41,16 +41,14 @@ public class OverviewDepositStrategy implements OverviewProductStrategy {
             // Get all deposits (CA + SA + FD )
             return depositOverviewService.getDepositOverview(
                     userAndCorp,
-                    baseCurrency,
-                    overviewReqDto.getCorpCifNo());
+                    baseCurrency);
 
         } else if (overviewReqDto.getProduct() == OverviewEnum.VIRTUALACCOUNT) {
             // Get only Virtual Accounts (sub-type of deposit)
             return depositOverviewService.getDepositSubTypeOverview(
                     userAndCorp,
                     com.m2e.dashboard.enums.OvSubProductEnum.VA,
-                    baseCurrency,
-                    overviewReqDto.getCorpCifNo());
+                    baseCurrency);
         }
 
         return overviewResDto;

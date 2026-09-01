@@ -68,7 +68,7 @@ eureka:
     enabled: false
 
 logger:
-  path: ${user.home}/app/cfo/dashboard/logs
+  path: C:\app\cfo\Dashboard\logs
 
 integration:
   bts-url: http://10.230.83.144:10003/bts

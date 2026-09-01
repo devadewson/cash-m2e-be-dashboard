@@ -5,4 +5,5 @@ import lombok.Data;
 @Data
 public class DepositFDAcctStatsReqDTO {
     private Boolean realTimeIndicator;
+    private String baseCurrency;
 }

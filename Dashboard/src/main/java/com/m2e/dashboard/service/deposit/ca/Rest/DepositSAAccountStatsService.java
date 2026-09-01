@@ -6,11 +6,14 @@ import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.deposit.ca.request.DepositAcctStatsReqDTO;
 import com.m2e.dashboard.dto.deposit.ca.response.DepositAcctStatsDTO;
+import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.enums.AcctTypEnum;
 import com.m2e.dashboard.model.BTS.Request.Summary;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryCategory;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryProduct;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
+import com.m2e.dashboard.service.overview.AssetGraph.GraphCurrencyConverter;
+import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
 import com.m2e.dashboard.util.DateTimeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,8 +24,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -33,7 +38,10 @@ public class DepositSAAccountStatsService {
     private final BTSAccountClient btsAccountClient;
     private final RedisTemplate<String, Object> redisTemplate;
     private final CorpCifResolver corpCifResolver;
+    private final KursResolver kursResolver;
+    private final GraphCurrencyConverter graphConverter;
 
+    private static final String IDR = "IDR";
     private static final String REDIS_KEY_PREFIX = "deposit:sa:stats:";
     private static final long CACHE_TTL_MINUTES = 15;
 
@@ -41,19 +49,26 @@ public class DepositSAAccountStatsService {
             UserAndCorp user, DepositAcctStatsReqDTO req) {
 
         String cifNo = corpCifResolver.resolveCif(user.getCorpId());
-        String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + cifNo;
+        String targetCurrency = (req.getBaseCurrency() != null && !req.getBaseCurrency().isBlank())
+                ? req.getBaseCurrency().trim().toUpperCase() : IDR;
+
+        String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + cifNo + ":" + targetCurrency;
 
         // CASE 1: non-realtime, ambil dari cache
         if (!Boolean.TRUE.equals(req.getRealTimeIndicator())) {
             DepositAcctStatsDTO cached = readFromCache(redisKey);
-            return success(cached != null ? cached : createEmptyStats());
+            return success(cached != null ? cached : createEmptyStats(targetCurrency));
         }
 
         // CASE 2: realtime, ambil dari BTS
         try {
             SummaryResponse btsResp = btsAccountClient.getAccountSummary(buildBTSRequest(user, cifNo));
 
-            DepositAcctStatsDTO stats = mapBtsToDepositStats(btsResp, cifNo);
+            DepositAcctStatsDTO stats = mapBtsToDepositStats(btsResp, cifNo, targetCurrency);
+            if (stats == null) {
+                return failure("Kurs tidak tersedia untuk konversi ke " + targetCurrency);
+            }
+
             stats.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
             stats.setLastUpdatedDate(DateTimeUtil.getTodayDate());
 
@@ -81,67 +96,91 @@ public class DepositSAAccountStatsService {
         return req;
     }
 
-    private DepositAcctStatsDTO mapBtsToDepositStats(SummaryResponse response, String cifNo) {
+    /**
+     * @return null kalau konversi gagal, supaya caller bisa mengembalikan error
+     *         alih-alih total yang tidak lengkap.
+     */
+    private DepositAcctStatsDTO mapBtsToDepositStats(
+            SummaryResponse response, String cifNo, String targetCurrency) {
+
         if (response == null
                 || response.getResponseData() == null
                 || response.getResponseData().getAssetList() == null) {
             log.warn("BTS response kosong untuk cif={}", cifNo);
-            return createEmptyStats();
+            return createEmptyStats(targetCurrency);
         }
 
-        int accountCount = 0;
+        List<SummaryProduct> saProducts = new ArrayList<>();
         int totalScanned = 0;
-        BigDecimal totalLedger = BigDecimal.ZERO;
-        BigDecimal totalAvailable = BigDecimal.ZERO;
-        String firstCurrency = null;
-        boolean mixedCurrency = false;
+        boolean needsConversion = false;
 
-        List<SummaryCategory> categories = response.getResponseData().getAssetList();
-
-        for (SummaryCategory category : categories) {
+        for (SummaryCategory category : response.getResponseData().getAssetList()) {
             if (category.getProductList() == null) {
                 continue;
             }
-
             for (SummaryProduct product : category.getProductList()) {
                 totalScanned++;
-
-                // TODO hapus setelah nilai accountType terverifikasi
-                log.info("BTS product: accountType=[{}] accNo=[{}] currency=[{}] amount=[{}]",
-                        product.getAccountType(), product.getAccNo(),
-                        product.getCurrencyCodeIso(), product.getAmount());
-
                 if (!isSavingAccount(product.getAccountType())) {
                     continue;
                 }
-
-                accountCount++;
+                saProducts.add(product);
 
                 String currency = product.getCurrencyCodeIso();
-                if (firstCurrency == null) {
-                    firstCurrency = currency;
-                } else if (currency != null && !firstCurrency.equalsIgnoreCase(currency)) {
-                    mixedCurrency = true;
+                if (currency != null && !targetCurrency.equalsIgnoreCase(currency.trim())) {
+                    needsConversion = true;
                 }
-
-                BigDecimal amount = parseAmount(product.getAmount(), product.getAccNo());
-                totalLedger = totalLedger.add(amount);
-                totalAvailable = totalAvailable.add(amount);
             }
         }
 
-        if (mixedCurrency) {
-            log.error("MIXED CURRENCY pada SA stats cif={}. Total dijumlah mentah tanpa konversi.", cifNo);
-        }
-        if (accountCount == 0 && totalScanned > 0) {
-            log.warn("cif={}: {} rekening di-scan, tidak ada yang bertipe {}. Cek nilai accountType dari BTS.",
-                    cifNo, totalScanned, AcctTypEnum.SA.name());
+        if (saProducts.isEmpty()) {
+            if (totalScanned > 0) {
+                log.warn("cif={}: {} rekening di-scan, tidak ada yang bertipe {}. "
+                                + "Cek nilai accountType dari BTS.",
+                        cifNo, totalScanned, AcctTypEnum.SA.name());
+            }
+            return createEmptyStats(targetCurrency);
         }
 
+        Map<String, BigDecimal> rateMap = Map.of();
+        if (needsConversion) {
+            KursResolution kurs = kursResolver.resolve();
+            if (kurs == null) {
+                log.error("Kurs tidak tersedia dari Trapi maupun DB, cif={} target={}",
+                        cifNo, targetCurrency);
+                return null;
+            }
+            rateMap = kurs.getRateMap();
+            log.info("SA stats kurs source={} pairs={} age={}h",
+                    kurs.getSource(), rateMap.size(), kurs.getAgeHours());
+        }
+
+        BigDecimal totalLedger = BigDecimal.ZERO;
+        BigDecimal totalAvailable = BigDecimal.ZERO;
+
+        for (SummaryProduct product : saProducts) {
+            BigDecimal amount = parseAmount(product.getAmount(), product.getAccNo());
+            String currency = product.getCurrencyCodeIso();
+
+            BigDecimal converted = graphConverter.convert(amount, currency, targetCurrency, rateMap);
+
+            if (converted == null) {
+                log.error("Gagal konversi {} {} -> {} untuk rekening {}. Total dibatalkan.",
+                        amount, currency, targetCurrency, product.getAccNo());
+                return null;
+            }
+
+            totalLedger = totalLedger.add(converted);
+            totalAvailable = totalAvailable.add(converted);
+        }
+
+        log.info("SA stats cif={} accounts={} total={} {}",
+                cifNo, saProducts.size(), totalLedger.toPlainString(), targetCurrency);
+
         DepositAcctStatsDTO statsDTO = new DepositAcctStatsDTO();
-        statsDTO.setNumberOfAcct(String.valueOf(accountCount));
+        statsDTO.setNumberOfAcct(String.valueOf(saProducts.size()));
         statsDTO.setTotalLedgerBal(format(totalLedger));
         statsDTO.setTotalAvailableBal(format(totalAvailable));
+        statsDTO.setCurrency(targetCurrency);
         return statsDTO;
     }
 
@@ -207,11 +246,12 @@ public class DepositSAAccountStatsService {
         return res;
     }
 
-    private DepositAcctStatsDTO createEmptyStats() {
+    private DepositAcctStatsDTO createEmptyStats(String currency) {
         DepositAcctStatsDTO emptyStats = new DepositAcctStatsDTO();
         emptyStats.setNumberOfAcct("0");
         emptyStats.setTotalLedgerBal("0.00");
         emptyStats.setTotalAvailableBal("0.00");
+        emptyStats.setCurrency(currency);
         return emptyStats;
     }
 }

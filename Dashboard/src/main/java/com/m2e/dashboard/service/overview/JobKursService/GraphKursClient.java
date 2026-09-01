@@ -1,4 +1,4 @@
-package com.m2e.dashboard.service.overview.AssetGraph;
+package com.m2e.dashboard.service.overview.JobKursService;
 
 
 import com.m2e.dashboard.model.Trapi.Response.KursAllResponse;

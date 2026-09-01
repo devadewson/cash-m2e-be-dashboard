@@ -4,6 +4,7 @@ import com.m2e.dashboard.auth.JwtUtil;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
+import com.m2e.dashboard.dto.trade.request.TradeAcctStatsReqDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctListingDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;
 import com.m2e.dashboard.enums.TradeEnum;
@@ -34,14 +35,11 @@ public class ExportLCSKBDNColectionController {
     )
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
-            (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-//        String userId = "LCUS-ILSSPICO";
-//        String corpId = "LCUS-ILSSPICO";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
-      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.EXPORT_LC_SKBDN_COLLECTION));
+            (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody TradeAcctStatsReqDTO reqStats) {
+
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        String baseCurrency = (reqStats != null) ? reqStats.getBaseCurrency() : null;
+        return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.EXPORT_LC_SKBDN_COLLECTION,baseCurrency));
     }
 
     @Operation(
@@ -50,11 +48,7 @@ public class ExportLCSKBDNColectionController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-//        String userId = "LCUS-ILSSPICO";
-//        String corpId = "LCUS-ILSSPICO";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
+
         UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.EXPORT_LC_SKBDN_COLLECTION));
     }

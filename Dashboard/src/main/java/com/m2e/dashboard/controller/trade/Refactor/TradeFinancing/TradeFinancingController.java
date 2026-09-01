@@ -4,6 +4,7 @@ import com.m2e.dashboard.auth.JwtUtil;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
+import com.m2e.dashboard.dto.trade.request.TradeAcctStatsReqDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctListingDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;
 import com.m2e.dashboard.enums.TradeEnum;
@@ -34,14 +35,11 @@ public class TradeFinancingController {
     )
     @PostMapping("acct-stats")
     public ResponseEntity<ApiResponse<TradeAcctStatsDTO>> getAccountStats
-            (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth) {
-//        String userId = "0005177476";
-//        String corpId = "0005177476";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
-      UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
-        return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.TRADE_FINANCING));
+            (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody TradeAcctStatsReqDTO reqStats) {
+
+        UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
+        String baseCurrency = (reqStats != null) ? reqStats.getBaseCurrency() : null;
+        return ResponseEntity.ok(tradeService.getTradeAccountStats(userAndCorp, TradeEnum.TRADE_FINANCING, baseCurrency));
     }
     @Operation(
             summary = "US 2, 2.1, 2.2 [BOTTOM] - Trade Financing Account List",
@@ -49,11 +47,6 @@ public class TradeFinancingController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-//        String userId = "0005177476";
-//        String corpId = "0005177476";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
         UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.TRADE_FINANCING));
     }
