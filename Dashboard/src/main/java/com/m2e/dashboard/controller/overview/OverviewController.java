@@ -29,7 +29,7 @@ import static com.m2e.dashboard.util.DownloadUtil.setHttpHeadersForDownload;
 @Tag(name = "M2UBIZM25-922 - Portfolio Overview", description = "PIC: Adibah")
 @RestController
 @Slf4j
-@RequestMapping("/portfolio/ov/v1")
+@RequestMapping("/portfolio/v1")
 public class OverviewController {
     @Autowired
     JwtUtil jwtUtil;

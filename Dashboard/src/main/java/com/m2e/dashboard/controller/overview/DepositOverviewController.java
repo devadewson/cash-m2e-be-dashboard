@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Deposit Overview", description = "PIC: Deva")
 @RestController
 @Slf4j
-@RequestMapping("/portfolio/deposit/v1")
+@RequestMapping("/portfolio/ov/v1")
 public class DepositOverviewController {
 
     @Autowired
