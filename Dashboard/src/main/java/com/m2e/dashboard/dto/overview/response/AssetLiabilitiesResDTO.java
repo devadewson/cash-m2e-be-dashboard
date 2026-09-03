@@ -31,39 +31,37 @@ public class AssetLiabilitiesResDTO {
     @JsonSerialize(using = ToStringSerializer.class)
     private BigDecimal quickRatio;
 
-    //add all products response from SP
-    private BigDecimal totalCA;
-    private BigDecimal totalMFCA;
-    private BigDecimal totalFCA;
+    private BigDecimal totalCA = BigDecimal.ZERO;
+    private BigDecimal totalMFCA = BigDecimal.ZERO;
+    private BigDecimal totalFCA = BigDecimal.ZERO;
 
-    private BigDecimal totalVA;
+    private BigDecimal totalVA = BigDecimal.ZERO;
 
-    private BigDecimal totalFD;
-    private BigDecimal totalTD;
+    private BigDecimal totalFD = BigDecimal.ZERO;
+    private BigDecimal totalTD = BigDecimal.ZERO;
 
-    private BigDecimal totalInv;
+    private BigDecimal totalInv = BigDecimal.ZERO;
 
-    private BigDecimal totalDpOther;
-    private BigDecimal totalLoanOther;
+    private BigDecimal totalDpOther = BigDecimal.ZERO;
+    private BigDecimal totalLoanOther = BigDecimal.ZERO;
 
-    private BigDecimal totalOD;
-    private BigDecimal totalTL;
-    private BigDecimal totalRc;
+    private BigDecimal totalOD = BigDecimal.ZERO;
+    private BigDecimal totalTL = BigDecimal.ZERO;
+    private BigDecimal totalRc = BigDecimal.ZERO;
 
-    private BigDecimal totalCrc;
-    private BigDecimal totalChc;
-    private BigDecimal totalDc;
+    private BigDecimal totalCrc = BigDecimal.ZERO;
+    private BigDecimal totalChc = BigDecimal.ZERO;
+    private BigDecimal totalDc = BigDecimal.ZERO;
 
-    private BigDecimal totalTRD;
-    private BigDecimal totalTRDI;
-    private BigDecimal totalTRDE;
-    private BigDecimal totalTRDG;
-    private BigDecimal totalTRDL;
+    private BigDecimal totalTRD = BigDecimal.ZERO;
+    private BigDecimal totalTRDI = BigDecimal.ZERO;
+    private BigDecimal totalTRDE = BigDecimal.ZERO;
+    private BigDecimal totalTRDG = BigDecimal.ZERO;
+    private BigDecimal totalTRDL = BigDecimal.ZERO;
 
-    private BigDecimal totalHp;
-    private BigDecimal totalBhp;
-    private BigDecimal totalFs;
-    private BigDecimal totalBD;
-    private BigDecimal totalPbr;
-
+    private BigDecimal totalHp = BigDecimal.ZERO;
+    private BigDecimal totalBhp = BigDecimal.ZERO;
+    private BigDecimal totalFs = BigDecimal.ZERO;
+    private BigDecimal totalBD = BigDecimal.ZERO;
+    private BigDecimal totalPbr = BigDecimal.ZERO;
 }

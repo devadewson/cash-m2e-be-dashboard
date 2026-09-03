@@ -1,7 +1,8 @@
 package com.m2e.dashboard.repository;
 
-import com.m2e.dashboard.dto.trade.DatamartListingProjection;
+import com.m2e.dashboard.projection.DatamartListingProjection;
 import com.m2e.dashboard.dto.trade.TradeAcctStatsByCurrencyProjection;
+import com.m2e.dashboard.dto.trade.TradeOutstandingByProductProjection;
 import com.m2e.dashboard.model.DataMart.DatamartAgreement;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +31,26 @@ public interface DatamartAgreementRepository extends JpaRepository<DatamartAgree
     List<TradeAcctStatsByCurrencyProjection> getAccountStats(
             @Param("cifNo") String cifNo,
             @Param("acctType") String acctType,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay
+    );
+
+    /** Seluruh produk trade sekaligus, dikelompokkan per productType dan currency. */
+    @Query("""
+        SELECT new com.m2e.dashboard.dto.trade.TradeOutstandingByProductProjection(
+            d.productType,
+            d.currency,
+            COUNT(d.id),
+            COALESCE(SUM(d.outstandingAmount), 0)
+        )
+        FROM DatamartAgreement d
+        WHERE d.facility = :cifNo
+          AND d.processDate >= :startOfDay
+          AND d.processDate < :endOfDay
+        GROUP BY d.productType, d.currency
+        """)
+    List<TradeOutstandingByProductProjection> getAllOutstandingByProductAndCurrency(
+            @Param("cifNo") String cifNo,
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay
     );

@@ -7,7 +7,7 @@ import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.common.SearchCollectionResponse;
 import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
-import com.m2e.dashboard.dto.trade.DatamartListingProjection;
+import com.m2e.dashboard.projection.DatamartListingProjection;
 import com.m2e.dashboard.dto.trade.TradeAcctStatsByCurrencyProjection;
 import com.m2e.dashboard.dto.trade.response.TradeAcctListingDTO;
 import com.m2e.dashboard.dto.trade.response.TradeAcctStatsDTO;

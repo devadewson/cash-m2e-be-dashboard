@@ -72,12 +72,6 @@ public class OverviewMapper {
                     case I:
                         assetLiabilitiesResDto.setTotalTRDI(amount);
                         break;
-                    case G:
-                        assetLiabilitiesResDto.setTotalTRDG(amount);
-                        break;
-                    case L:
-                        assetLiabilitiesResDto.setTotalTRDL(amount);
-                        break;
                     case TL:
                         assetLiabilitiesResDto.setTotalTL(amount);
                         break;
@@ -141,8 +135,6 @@ public class OverviewMapper {
             case TRD:
             case I:
             case E:
-            case G:
-            case L:
             case HP:
             case BHP:
                 target.setLedgerBalance(BigDecimal.ZERO);

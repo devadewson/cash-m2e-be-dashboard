@@ -10,8 +10,10 @@ import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.response.AssetLiabilitiesResDTO;
 import com.m2e.dashboard.dto.overview.response.OverviewResDTO;
 import com.m2e.dashboard.dto.overview.response.OverviewSubResDTO;
+import com.m2e.dashboard.dto.trade.TradeOutstandingByProductProjection;
 import com.m2e.dashboard.enums.OvSubProductEnum;
 import com.m2e.dashboard.enums.OverviewEnum;
+import com.m2e.dashboard.repository.DatamartAgreementRepository;
 import com.m2e.dashboard.service.deposit.ca.Rest.DepositAllAccountListService;
 import com.m2e.dashboard.service.overview.AssetGraph.GraphCurrencyConverter;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
@@ -21,6 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -32,10 +36,13 @@ import java.util.stream.Collectors;
 /**
  * Service untuk deposit overview.
  *
- * Listing (/overview, /overview/{subProduct})
+ * Listing (/overview, /overview/{subProduct}) mengembalikan nilai apa adanya
+ * dari BTS, tiap rekening membawa currency masing-masing.
  *
- * Summary (/asset) menjumlahkan seluruh rekening, jadi wajib dikonversi
- * ke satu currency sebelum diagregasi.
+ * Summary (/asset) menjumlahkan lintas rekening dan lintas produk, jadi:
+ * - asset diambil dari deposit (BTS)
+ * - liabilities diambil dari outstanding trade (DATAMART_AGREEMENT)
+ * - keduanya dikonversi ke targetCurrency memakai kurs yang sama
  */
 @Slf4j
 @Service
@@ -47,6 +54,7 @@ public class DepositOverviewService {
     private final GraphCurrencyConverter graphConverter;
     private final DepositAccountMapper accountMapper;
     private final CorpCifResolver corpCifResolver;
+    private final DatamartAgreementRepository datamartAgreementRepository;
 
     private static final String IDR = "IDR";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
@@ -54,7 +62,7 @@ public class DepositOverviewService {
             DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm:ss '(GMT+8)'");
 
     /**
-     * Get all deposit accounts.
+     * Get all deposit accounts. Nilai apa adanya dari BTS, tanpa konversi.
      */
     public OverviewResDTO getDepositOverview(UserAndCorp userAndCorp, String baseCurrency) {
 
@@ -80,8 +88,8 @@ public class DepositOverviewService {
     }
 
     /**
-     * Get deposit asset & liabilities summary. Seluruh rekening dikonversi
-     * ke targetCurrency sebelum dijumlah.
+     * Asset dari deposit (BTS), liabilities dari outstanding trade (DATAMART).
+     * Keduanya dikonversi ke targetCurrency dengan kurs yang sama.
      */
     public ApiResponse<AssetLiabilitiesResDTO> getDepositAssetLiabilities(
             UserAndCorp userAndCorp, String baseCurrency) {
@@ -96,11 +104,26 @@ public class DepositOverviewService {
         AssetLiabilitiesResDTO result = new AssetLiabilitiesResDTO();
         result.setCurrency(targetCurrency);
 
-        List<OverviewSubResDTO> convertedAccounts =
-                fetchAndConvertAccounts(userAndCorp, corpCifNo, targetCurrency);
+        // Kurs diambil sekali, dipakai untuk deposit dan trade
+        KursResolution kurs = kursResolver.resolve();
+        Map<String, BigDecimal> rateMap = (kurs != null) ? kurs.getRateMap() : Map.of();
+
+        if (kurs == null) {
+            log.error("Kurs tidak tersedia dari Trapi maupun DB | cif={}. "
+                    + "Total lintas currency TIDAK VALID.", corpCifNo);
+        } else {
+            log.info("Kurs source={} pairs={} age={}h",
+                    kurs.getSource(), rateMap.size(), kurs.getAgeHours());
+        }
+
+        // ===== ASSET: deposit dari BTS =====
+        List<OverviewSubResDTO> mappedAccounts = fetchAccountsRaw(userAndCorp, corpCifNo);
+        List<OverviewSubResDTO> convertedAccounts = (kurs != null)
+                ? convertAllAccounts(mappedAccounts, targetCurrency, rateMap)
+                : mappedAccounts;
 
         aggregateBySubProduct(result, convertedAccounts);
-        zeroOutAllLiabilities(result);
+        zeroOutNonTradeLiabilities(result);
 
         BigDecimal totalAsset = result.getTotalCA()
                 .add(result.getTotalMFCA())
@@ -110,10 +133,13 @@ public class DepositOverviewService {
                 .add(result.getTotalVA())
                 .add(result.getTotalDpOther());
 
+        // ===== LIABILITIES: outstanding trade dari DATAMART =====
+        BigDecimal totalTrade = aggregateTrade(result, corpCifNo, targetCurrency, rateMap);
+
         result.setTotalAsset(totalAsset);
-        result.setTotalLiabilities(BigDecimal.ZERO);
+        result.setTotalLiabilities(totalTrade);
         result.setTotalAssetRatio(totalAsset);
-        result.setTotalLiabilitiesRatio(BigDecimal.ZERO);
+        result.setTotalLiabilitiesRatio(totalTrade);
         result.setWorkingRatio(BigDecimal.ZERO);
         result.setQuickRatio(BigDecimal.ZERO);
 
@@ -122,14 +148,14 @@ public class DepositOverviewService {
         apiResponse.setMsgBody(result);
         apiResponse.setMsgHeader(new ErrorResponse("0"));
 
-        log.info("=== getDepositAssetLiabilities END | cif={} totalAsset={} {} ===",
-                corpCifNo, totalAsset, targetCurrency);
+        log.info("=== getDepositAssetLiabilities END | cif={} asset={} liabilities={} {} ===",
+                corpCifNo, totalAsset, totalTrade, targetCurrency);
 
         return apiResponse;
     }
 
     /**
-     * Get detail overview untuk satu sub-type.
+     * Get detail overview untuk satu sub-type. Nilai apa adanya dari BTS.
      */
     public OverviewResDTO getDepositSubTypeOverview(
             UserAndCorp userAndCorp, OvSubProductEnum subProduct, String baseCurrency) {
@@ -158,7 +184,7 @@ public class DepositOverviewService {
         return overviewResDto;
     }
 
-    // ==================== PRIVATE ====================
+    // ==================== DEPOSIT ====================
 
     private String resolveTargetCurrency(String baseCurrency) {
         return (baseCurrency != null && !baseCurrency.isBlank())
@@ -178,43 +204,6 @@ public class DepositOverviewService {
 
         log.info("Fetched {} accounts from BTS | cif={}", btsAccounts.size(), corpCifNo);
         return new ArrayList<>(accountMapper.mapAll(btsAccounts));
-    }
-
-    /**
-     * Ambil akun dari BTS lalu konversi seluruhnya ke targetCurrency.
-     */
-    private List<OverviewSubResDTO> fetchAndConvertAccounts(
-            UserAndCorp userAndCorp, String corpCifNo, String targetCurrency) {
-
-        try {
-            KursResolution kurs = kursResolver.resolve();
-
-            if (kurs == null) {
-                log.error("FALLBACK: kurs tidak tersedia dari Trapi maupun DB | cif={}. "
-                        + "Total lintas currency TIDAK VALID.", corpCifNo);
-                return fetchAccountsRaw(userAndCorp, corpCifNo);
-            }
-
-            Map<String, BigDecimal> rateMap = kurs.getRateMap();
-            log.info("Kurs source={} pairs={} age={}h",
-                    kurs.getSource(), rateMap.size(), kurs.getAgeHours());
-
-            List<OverviewSubResDTO> mappedAccounts = fetchAccountsRaw(userAndCorp, corpCifNo);
-            if (mappedAccounts.isEmpty()) {
-                return mappedAccounts;
-            }
-
-            List<OverviewSubResDTO> convertedAccounts =
-                    convertAllAccounts(mappedAccounts, targetCurrency, rateMap);
-
-            log.info("Converted {} accounts to {} | cif={}",
-                    convertedAccounts.size(), targetCurrency, corpCifNo);
-            return convertedAccounts;
-
-        } catch (Exception e) {
-            log.error("Error in fetchAndConvertAccounts | cif={}: {}", corpCifNo, e.getMessage(), e);
-            return fetchAccountsRaw(userAndCorp, corpCifNo);
-        }
     }
 
     private List<DepositAcctSummarySpDTO> fetchRawBtsAccounts(UserAndCorp userAndCorp, String corpCifNo) {
@@ -249,7 +238,7 @@ public class DepositOverviewService {
     }
 
     /**
-     * Konversi satu rekening. Null kalau rate tidak ditemukan
+     * Konversi satu rekening. Null kalau rate tidak ditemukan,
      */
     private OverviewSubResDTO convertSingleAccount(
             OverviewSubResDTO account, String targetCurrency, Map<String, BigDecimal> rateMap) {
@@ -316,8 +305,100 @@ public class DepositOverviewService {
         result.setTotalVA(totalVA);
         result.setTotalDpOther(totalSA.add(totalOther));
         result.setTotalInv(BigDecimal.ZERO);
-        result.setTotalLoanOther(BigDecimal.ZERO);
     }
+
+    // ==================== TRADE ====================
+
+    private BigDecimal aggregateTrade(AssetLiabilitiesResDTO result, String cifNo,
+                                      String targetCurrency, Map<String, BigDecimal> rateMap) {
+
+        LocalDate today = LocalDate.now();
+        LocalDateTime startOfDay = today.atStartOfDay();
+        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+
+        try {
+            List<TradeOutstandingByProductProjection> rows =
+                    datamartAgreementRepository.getAllOutstandingByProductAndCurrency(
+                            cifNo, startOfDay, endOfDay);
+
+            if (rows.isEmpty()) {
+                log.warn("Tidak ada data trade untuk cif={} tanggal={}. "
+                        + "Cek apakah job SFTP sudah jalan hari ini.", cifNo, today);
+                setTradeTotals(result, BigDecimal.ZERO, BigDecimal.ZERO,
+                        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+                return BigDecimal.ZERO;
+            }
+
+            BigDecimal total = BigDecimal.ZERO;
+            BigDecimal trdImport = BigDecimal.ZERO;
+            BigDecimal trdExport = BigDecimal.ZERO;
+            BigDecimal trdGuarantee = BigDecimal.ZERO;
+            BigDecimal trdLoan = BigDecimal.ZERO;
+
+            for (TradeOutstandingByProductProjection row : rows) {
+                BigDecimal amount = row.getTotalOutstandingBal() != null
+                        ? row.getTotalOutstandingBal() : BigDecimal.ZERO;
+
+                if (amount.signum() == 0) {
+                    continue;
+                }
+
+                BigDecimal converted = graphConverter.convert(
+                        amount, row.getCurrency(), targetCurrency, rateMap);
+
+                if (converted == null) {
+                    log.error("Gagal konversi trade {} {} -> {} pada produk [{}]. Nilai dilewati.",
+                            amount, row.getCurrency(), targetCurrency, row.getProductType());
+                    continue;
+                }
+
+                total = total.add(converted);
+
+                OvSubProductEnum sub = OvSubProductEnum.fromDescription(row.getProductType());
+                if (sub == null) {
+                    log.warn("productType [{}] tidak ada di OvSubProductEnum. "
+                            + "Masuk grand total tapi tidak masuk bucket.", row.getProductType());
+                    continue;
+                }
+
+                switch (sub.getTradeBucket()) {
+                    case IMPORT:    trdImport    = trdImport.add(converted);    break;
+                    case EXPORT:    trdExport    = trdExport.add(converted);    break;
+                    case GUARANTEE: trdGuarantee = trdGuarantee.add(converted); break;
+                    case FINANCING: trdLoan      = trdLoan.add(converted);      break;
+                    default:
+                        log.warn("Produk [{}] bukan produk trade, tidak masuk bucket mana pun",
+                                row.getProductType());
+                        break;
+                }
+            }
+
+            setTradeTotals(result, total, trdImport, trdExport, trdGuarantee, trdLoan);
+
+            log.info("Trade cif={} total={} (I={} E={} G={} L={}) {}",
+                    cifNo, total, trdImport, trdExport, trdGuarantee, trdLoan, targetCurrency);
+
+            return total;
+
+        } catch (Exception e) {
+            log.error("Gagal agregasi trade | cif={}: {}", cifNo, e.getMessage(), e);
+            setTradeTotals(result, BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private void setTradeTotals(AssetLiabilitiesResDTO result, BigDecimal total,
+                                BigDecimal trdI, BigDecimal trdE,
+                                BigDecimal trdG, BigDecimal trdL) {
+        result.setTotalTRD(total);
+        result.setTotalTRDI(trdI);
+        result.setTotalTRDE(trdE);
+        result.setTotalTRDG(trdG);
+        result.setTotalTRDL(trdL);
+    }
+
+    // ==================== HELPER ====================
 
     private AccountListReq createAccountListRequest(String corpCifNo) {
         AccountListReq req = new AccountListReq();
@@ -327,18 +408,14 @@ public class DepositOverviewService {
         return req;
     }
 
-    private void zeroOutAllLiabilities(AssetLiabilitiesResDTO dto) {
+    /** Liabilities selain trade masih nol sampai produk loan dan cards ditambahkan. */
+    private void zeroOutNonTradeLiabilities(AssetLiabilitiesResDTO dto) {
         dto.setTotalOD(BigDecimal.ZERO);
         dto.setTotalTL(BigDecimal.ZERO);
         dto.setTotalRc(BigDecimal.ZERO);
         dto.setTotalCrc(BigDecimal.ZERO);
         dto.setTotalChc(BigDecimal.ZERO);
         dto.setTotalDc(BigDecimal.ZERO);
-        dto.setTotalTRD(BigDecimal.ZERO);
-        dto.setTotalTRDI(BigDecimal.ZERO);
-        dto.setTotalTRDE(BigDecimal.ZERO);
-        dto.setTotalTRDG(BigDecimal.ZERO);
-        dto.setTotalTRDL(BigDecimal.ZERO);
         dto.setTotalHp(BigDecimal.ZERO);
         dto.setTotalBhp(BigDecimal.ZERO);
         dto.setTotalFs(BigDecimal.ZERO);

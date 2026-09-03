@@ -1,4 +1,4 @@
-package com.m2e.dashboard.dto.trade;
+package com.m2e.dashboard.projection;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
