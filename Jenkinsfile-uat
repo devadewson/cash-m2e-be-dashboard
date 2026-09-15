@@ -208,7 +208,7 @@ pipeline {
                             -p ${APP_PORT}:${APP_PORT} \
                             --network slirp4netns \
                             -e SPRING_PROFILES_ACTIVE=${image_env} \
-                            -e EUREKA_IP=10.235.83.32 \
+                            -e EUREKA_IP=10.235.83.153 \
                             -v /etc/hosts:/etc/hosts:ro \
                             -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
                             -v ${APP_PATH}:/logs \
@@ -266,7 +266,7 @@ pipeline {
                             -p ${APP_PORT}:${APP_PORT} \
                             --network slirp4netns \
                             -e SPRING_PROFILES_ACTIVE=${image_env} \
-                            -e EUREKA_IP=10.235.83.32 \
+                            -e EUREKA_IP=10.235.83.153 \
                             -v /etc/hosts:/etc/hosts:ro \
                             -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
                             -v ${APP_PATH}:/logs \
