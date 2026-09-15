@@ -1,0 +1,318 @@
+pipeline {
+    agent { label 'docker-agent' }
+
+    tools {
+        maven "maven-3.9.1"
+        jdk "jdk-17.0.2"
+    }
+
+    parameters {
+        choice(name: 'VAR_IMAGE_BUILD_FLAG', choices: ['true', 'false'], description: 'Flag for Container Image Build')
+        choice(name: 'VAR_IMAGE_PUSH_FLAG', choices: ['true', 'false'], description: 'Flag for Container Image Push')
+        choice(name: 'VAR_DEPLOY_FLAG', choices: ['true', 'false'], description: 'Flag for Deployment')
+        string(name: 'TARGET_SERVER_1', defaultValue: '10.235.83.153', description: 'Input IP target server 1')
+        string(name: 'TARGET_SERVER_2', defaultValue: '10.235.83.154', description: 'Input IP target server 2 (optional)')
+        choice(name: 'DEPLOY_BOTH_SERVER', choices: ['true', 'false'], description: 'Deploy to both server?')
+        string(name: 'image_version', defaultValue: '1.0.0', description: 'Set your image tag')
+        string(name: 'MODEL_VERSION', defaultValue: '1.3.1-SNAPSHOT', description: 'Model dependency version')
+        string(name: 'UTILS_VERSION', defaultValue: '1.3.1-SNAPSHOT', description: 'Utils dependency version')
+    }
+
+    environment {
+        VAR_IMAGE_BUILD_FLAG = "${params.VAR_IMAGE_BUILD_FLAG}"
+        VAR_IMAGE_PUSH_FLAG  = "${params.VAR_IMAGE_PUSH_FLAG}"
+        VAR_DEPLOY_FLAG      = "${params.VAR_DEPLOY_FLAG}"
+
+        repo        = "repouat.maybank.co.id:8082/m2e"
+        image_name  = "cash-m2e-be-dashboard"
+        image_env   = "uat"
+        SSH_TARGET1 = "sa-rootless@${params.TARGET_SERVER_1}"
+        SSH_TARGET2 = "sa-rootless@${params.TARGET_SERVER_2}"
+        APP_PATH    = "/data/sa-rootless/source/cash-m2e-be-dashboard"
+        APP_PORT    = "9015"
+
+        NEXUS_URL = "https://repouat.maybank.co.id/repository"
+        RAW_REPO_URL = "${NEXUS_URL}/raw/m2e"
+        NEXUS_USERNAME = "raw-user"
+        NEXUS_PASSWORD = "M@ybank12345!!!"
+
+        MODEL_VERSION = "${params.MODEL_VERSION}"
+        MODEL_ARTIFACT = "cash-m2e-be-model"
+        UTILS_VERSION = "${params.UTILS_VERSION}"
+        UTILS_ARTIFACT = "cash-m2e-utils"
+    }
+
+    stages {
+        stage('Maven Build') {
+            steps {
+                configFileProvider([configFile(fileId: 'MavenSettingM2E', variable: 'MAVEN_SETTINGS_XML')]) {
+                    sh '''
+                        echo "========================================="
+                        echo "Building ${image_name} version ${image_version}"
+                        echo "========================================="
+
+                        pwd
+                        ls -alh
+                        mvn --version
+
+                        # Create temp directory for downloading dependencies
+                        mkdir -p temp_deps
+                        cd temp_deps
+
+                        echo "📥 Downloading utils-${UTILS_VERSION} from Nexus Raw repository..."
+                        curl -f -k -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" -L -o utils-${UTILS_VERSION}.jar \
+                            "${RAW_REPO_URL}/com/m2e/utils/${UTILS_VERSION}/utils-${UTILS_VERSION}.jar"
+                        curl -f -k -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" -L -o utils-${UTILS_VERSION}.pom \
+                            "${RAW_REPO_URL}/com/m2e/utils/${UTILS_VERSION}/utils-${UTILS_VERSION}.pom"
+
+                        echo "📥 Downloading ConvModel-${MODEL_VERSION} from Nexus Raw repository..."
+                        curl -f -k -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" -L -o ConvModel-${MODEL_VERSION}.jar \
+                            "${RAW_REPO_URL}/com/m2e/ConvModel/${MODEL_VERSION}/ConvModel-${MODEL_VERSION}.jar"
+                        curl -f -k -u "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" -L -o ConvModel-${MODEL_VERSION}.pom \
+                            "${RAW_REPO_URL}/com/m2e/ConvModel/${MODEL_VERSION}/ConvModel-${MODEL_VERSION}.pom"
+
+                        echo "⚙️ Installing dependencies to local Maven repository..."
+                        mvn install:install-file -Djansi.tmpdir=. -Dfile=utils-${UTILS_VERSION}.jar -DpomFile=utils-${UTILS_VERSION}.pom -DgroupId=com.m2e -DartifactId=utils -Dversion=${UTILS_VERSION} -Dpackaging=jar -s $MAVEN_SETTINGS_XML
+                        mvn install:install-file -Djansi.tmpdir=. -Dfile=ConvModel-${MODEL_VERSION}.jar -DpomFile=ConvModel-${MODEL_VERSION}.pom -DgroupId=com.m2e -DartifactId=ConvModel -Dversion=${MODEL_VERSION} -Dpackaging=jar -s $MAVEN_SETTINGS_XML
+
+                        # Clean up temp directory
+                        cd ..
+                        rm -rf temp_deps
+
+                        # Update version di pom.xml (jika ada property)
+                        sed -i "s@<build.version>.*</build.version>@<build.version>${image_version}</build.version>@" pom.xml || true
+                        sed -i "s@<m2e.utils.version>.*</m2e.utils.version>@<m2e.utils.version>${UTILS_VERSION}</m2e.utils.version>@" pom.xml || true
+                        sed -i "s@<m2e.model.version>.*</m2e.model.version>@<m2e.model.version>${MODEL_VERSION}</m2e.model.version>@" pom.xml || true
+
+                        mvn clean install -Djansi.tmpdir=. -DskipTests -U -s $MAVEN_SETTINGS_XML -Dm2e.utils.version=${UTILS_VERSION} -Dm2e.model.version=${MODEL_VERSION}
+                        mvn package spring-boot:repackage -Djansi.tmpdir=. -DskipTests -U -s $MAVEN_SETTINGS_XML -Dm2e.utils.version=${UTILS_VERSION} -Dm2e.model.version=${MODEL_VERSION}
+
+                        # Copy JAR from submodule to root target directory so Dockerfile and check can find it
+                        mkdir -p target
+                        cp Dashboard/target/Dashboard-*.jar target/ || true
+
+                        # Cek JAR
+                        JAR_FILE=$(find target -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
+                        if [ -z "$JAR_FILE" ]; then
+                            echo "❌ No JAR file found!"
+                            exit 1
+                        fi
+                        echo "✅ Build successful! JAR: $JAR_FILE"
+                        ls -lh $JAR_FILE
+                    '''
+                }
+            }
+        }
+
+        stage('Image Build') {
+            when {
+                expression { params.VAR_IMAGE_BUILD_FLAG == 'true' }
+            }
+            steps {
+                sh '''
+                    echo "========================================="
+                    echo "Building Container Image"
+                    echo "========================================="
+                    echo "Image: ${repo}/${image_name}-${image_env}:${image_version}"
+
+                    podman build --no-cache=true --load -t ${repo}/${image_name}-${image_env}:${image_version} .
+
+                    if [ $? -eq 0 ]; then
+                        echo "✅ Image build successful!"
+                        podman images | grep "${repo}/${image_name}-${image_env}"
+                    else
+                        echo "❌ Image build failed!"
+                        exit 1
+                    fi
+                '''
+            }
+        }
+
+        stage('Image Push') {
+            when {
+                expression { params.VAR_IMAGE_PUSH_FLAG == 'true' }
+            }
+            steps {
+                retry(count: 3) {
+                    sh '''
+                        echo "========================================="
+                        echo "Pushing Container Image"
+                        echo "========================================="
+                        echo "Image: ${repo}/${image_name}-${image_env}:${image_version}"
+
+                        podman push ${repo}/${image_name}-${image_env}:${image_version}
+
+                        if [ $? -eq 0 ]; then
+                            echo "✅ Image push successful!"
+                        else
+                            echo "❌ Image push failed!"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Check Server Target') {
+            steps {
+                sshagent(credentials: ['ssh-sa-rootless']) {
+                    sh '''
+                        echo "========================================="
+                        echo "Checking Target Server"
+                        echo "========================================="
+
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "hostnamectl"
+                        echo ""
+                        echo "📦 Existing images:"
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman image ls | grep ${image_name} || echo 'No images found'"
+                        echo ""
+                        echo "📦 Running containers:"
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman ps -a | grep ${image_name} || echo 'No containers found'"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Target Server 1') {
+            when {
+                expression { params.VAR_DEPLOY_FLAG == 'true' }
+            }
+            steps {
+                sshagent(credentials: ['ssh-sa-rootless']) {
+                    sh '''
+                        echo "========================================="
+                        echo "Deploying to Target Server"
+                        echo "========================================="
+                        echo "Image: ${repo}/${image_name}-${image_env}:${image_version}"
+                        echo "Port: ${APP_PORT}"
+
+                        # Create app directory
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "mkdir -p ${APP_PATH}"
+
+                        # Stop and remove existing container
+                        echo "Stopping existing container..."
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman stop ${image_name} || true"
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman rm ${image_name} || true"
+
+                        # Remove old image
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman rmi ${repo}/${image_name}-${image_env}:${image_version} || true"
+
+                        # Pull new image
+                        echo "Pulling image..."
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman pull ${repo}/${image_name}-${image_env}:${image_version}"
+
+                        # Run container
+                        echo "Running container..."
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman run -d \
+                            --name ${image_name} \
+                            -p ${APP_PORT}:${APP_PORT} \
+                            --network slirp4netns \
+                            -e SPRING_PROFILES_ACTIVE=${image_env} \
+                            -e EUREKA_IP=10.235.83.153 \
+                            -v /etc/hosts:/etc/hosts:ro \
+                            -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
+                            -v ${APP_PATH}:/logs \
+                            ${repo}/${image_name}-${image_env}:${image_version}"
+
+                        if [ $? -eq 0 ]; then
+                            echo "✅ Deployment successful!"
+                            echo ""
+                            echo "📊 Container status:"
+                            ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman ps -a | grep ${image_name}"
+                            echo ""
+                            echo "📊 Container logs:"
+                            ssh -o StrictHostKeyChecking=no ${SSH_TARGET1} "podman logs --tail 20 ${image_name}"
+                        else
+                            echo "❌ Deployment failed!"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Target Server 2') {
+            when {
+                expression { params.VAR_DEPLOY_FLAG == 'true' }
+            }
+            steps {
+                sshagent(credentials: ['ssh-sa-rootless']) {
+                    sh '''
+                        echo "========================================="
+                        echo "Deploying to Target Server"
+                        echo "========================================="
+                        echo "Image: ${repo}/${image_name}-${image_env}:${image_version}"
+                        echo "Port: ${APP_PORT}"
+
+                        # Create app directory
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "mkdir -p ${APP_PATH}"
+
+                        # Stop and remove existing container
+                        echo "Stopping existing container..."
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman stop ${image_name} || true"
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman rm ${image_name} || true"
+
+                        # Remove old image
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman rmi ${repo}/${image_name}-${image_env}:${image_version} || true"
+
+                        # Pull new image
+                        echo "Pulling image..."
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman pull ${repo}/${image_name}-${image_env}:${image_version}"
+
+                        # Run container
+                        echo "Running container..."
+                        ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman run -d \
+                            --name ${image_name} \
+                            -p ${APP_PORT}:${APP_PORT} \
+                            --network slirp4netns \
+                            -e SPRING_PROFILES_ACTIVE=${image_env} \
+                            -e EUREKA_IP=10.235.83.153 \
+                            -v /etc/hosts:/etc/hosts:ro \
+                            -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
+                            -v ${APP_PATH}:/logs \
+                            ${repo}/${image_name}-${image_env}:${image_version}"
+
+                        if [ $? -eq 0 ]; then
+                            echo "✅ Deployment successful!"
+                            echo ""
+                            echo "📊 Container status:"
+                            ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman ps -a | grep ${image_name}"
+                            echo ""
+                            echo "📊 Container logs:"
+                            ssh -o StrictHostKeyChecking=no ${SSH_TARGET2} "podman logs --tail 20 ${image_name}"
+                        else
+                            echo "❌ Deployment failed!"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+    }
+
+    post {
+        always {
+            cleanWs()
+            sh 'podman image ls | grep "${repo}/${image_name}-${image_env}" || true'
+        }
+        success {
+            echo "========================================="
+            echo "🎉 BUILD AND DEPLOYMENT COMPLETED SUCCESSFULLY!"
+            echo "========================================="
+            echo "📦 Image: ${repo}/${image_name}-${image_env}:${image_version}"
+            echo "🚀 Server 1: ${SSH_TARGET1}"
+            echo "🚀 Server 2: ${SSH_TARGET2}"
+            echo "📁 Path: ${APP_PATH}"
+            echo "🔌 Port: ${APP_PORT}"
+            echo "========================================="
+        }
+        failure {
+            echo "========================================="
+            echo "❌ BUILD OR DEPLOYMENT FAILED!"
+            echo "========================================="
+            echo "Please check logs above for details."
+            echo "========================================="
+        }
+    }
+}
