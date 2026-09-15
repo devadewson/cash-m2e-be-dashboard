@@ -28,7 +28,7 @@ pipeline {
         image_env   = "uat"
         SSH_TARGET1 = "sa-rootless@${params.TARGET_SERVER_1}"
         SSH_TARGET2 = "sa-rootless@${params.TARGET_SERVER_2}"
-        APP_PATH    = "/data/source/cash-m2e-be-dashboard"
+        APP_PATH    = "/data/sa-rootless/source/cash-m2e-be-dashboard"
         APP_PORT    = "9015"
 
         NEXUS_URL = "https://repouat.maybank.co.id/repository"
@@ -89,7 +89,7 @@ pipeline {
 
                         # Copy JAR from submodule to root target directory so Dockerfile and check can find it
                         mkdir -p target
-                        cp Authentication/target/Authentication-*.jar target/ || true
+                        cp Dashboard/target/Dashboard-*.jar target/ || true
 
                         # Cek JAR
                         JAR_FILE=$(find target -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
@@ -210,7 +210,7 @@ pipeline {
                             -e SPRING_PROFILES_ACTIVE=${image_env} \
                             -e EUREKA_IP=10.235.83.32 \
                             -v /etc/hosts:/etc/hosts:ro \
-                            -v /data/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
+                            -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
                             -v ${APP_PATH}:/logs \
                             ${repo}/${image_name}-${image_env}:${image_version}"
 
@@ -268,7 +268,7 @@ pipeline {
                             -e SPRING_PROFILES_ACTIVE=${image_env} \
                             -e EUREKA_IP=10.235.83.32 \
                             -v /etc/hosts:/etc/hosts:ro \
-                            -v /data/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
+                            -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
                             -v ${APP_PATH}:/logs \
                             ${repo}/${image_name}-${image_env}:${image_version}"
 
