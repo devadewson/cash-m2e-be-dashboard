@@ -1,6 +1,5 @@
 package com.m2e.dashboard.service.overview.JobKursService;
 
-
 import com.m2e.dashboard.dto.overview.Refactor.KursHistoryResultDTO;
 import com.m2e.dashboard.model.Overview.KursHistoryEntity;
 import com.m2e.dashboard.model.Trapi.Response.KursAllResponse;
@@ -9,6 +8,7 @@ import com.m2e.dashboard.repository.KursHistoryRepository;
 import com.m2e.dashboard.service.overview.Refactor.CurrencyConverterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +32,20 @@ public class KursHistoryService {
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /** Ambil getKursAll dari Trapi lalu simpan seluruh barisnya.*/
+    // Cron Job Trigger
+    @Scheduled(cron = "${job.kurs-history.cron:-}", zone = "Asia/Jakarta")
+    public void scheduledFetchAndStore() {
+        log.info("[KURS-HIST] Scheduled run triggered");
+        try {
+            KursHistoryResultDTO result = fetchAndStore();
+            log.info("[KURS-HIST] Scheduled run finished: status={} rows={}",
+                    result.getStatus(), result.getTotalRows());
+        } catch (Exception e) {
+            log.error("[KURS-HIST] Scheduled run failed", e);
+        }
+    }
+
+    /** Ambil kurs dari Trapi lalu simpan seluruh barisnya. */
     @Transactional
     public KursHistoryResultDTO fetchAndStore() {
         KursHistoryResultDTO result = new KursHistoryResultDTO();
@@ -65,14 +78,14 @@ public class KursHistoryService {
             }
 
             List<KursHistoryEntity> entities = new ArrayList<>(rates.size());
-            int spotCount = 0;
-            String spotValueDate = null;
+            int validCount = 0;
+            String valueDate = null;
 
             for (KursRateDTO rate : rates) {
-                if ("SPOT".equalsIgnoreCase(rate.getTenor())) {
-                    spotCount++;
-                    if (spotValueDate == null && rate.getValueDate() != null) {
-                        spotValueDate = rate.getValueDate();
+                if (rate.getBidAllIn() != null && !rate.getBidAllIn().isBlank()) {
+                    validCount++;
+                    if (valueDate == null && rate.getValueDate() != null) {
+                        valueDate = rate.getValueDate();
                     }
                 }
                 entities.add(toEntity(rate, batchId, fetchTime));
@@ -84,13 +97,13 @@ public class KursHistoryService {
 
             result.setStatus("SUCCESS");
             result.setTotalRows(entities.size());
-            result.setSpotRows(spotCount);
+            result.setSpotRows(validCount);
             result.setValidPairs(rateMap.size());
-            result.setSpotValueDate(spotValueDate);
+            result.setSpotValueDate(valueDate);
             result.setMessage(entities.size() + " baris kurs tersimpan");
 
-            log.info("[KURS-HIST] END batchId={} rows={} spot={} pairs={} valueDate={}",
-                    batchId, entities.size(), spotCount, rateMap.size(), spotValueDate);
+            log.info("[KURS-HIST] END batchId={} rows={} valid={} pairs={} valueDate={}",
+                    batchId, entities.size(), validCount, rateMap.size(), valueDate);
 
         } catch (Exception e) {
             log.error("[KURS-HIST] Fatal error batchId={}", batchId, e);

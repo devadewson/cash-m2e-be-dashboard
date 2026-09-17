@@ -44,7 +44,7 @@ public class KursResolver {
                 KursResolution res = new KursResolution();
                 res.setSource("TRAPI");
                 res.setRateMap(currencyConverterService.buildRateMap(response.getRespData()));
-                res.setValueDate(firstSpotValueDate(response.getRespData()));
+                res.setValueDate(firstValueDate(response.getRespData()));
                 res.setFetchTime(LocalDateTime.now().format(TS));
                 res.setAgeHours(0);
                 res.setStale(false);
@@ -81,7 +81,7 @@ public class KursResolver {
         KursResolution res = new KursResolution();
         res.setSource("DATABASE");
         res.setRateMap(currencyConverterService.buildRateMap(dtos));
-        res.setValueDate(firstSpotValueDate(dtos));
+        res.setValueDate(firstValueDate(dtos));
         res.setFetchTime(fetchTime.format(TS));
         res.setAgeHours(ageHours);
         res.setStale(ageHours > maxAgeHours);
@@ -118,10 +118,9 @@ public class KursResolver {
         return d;
     }
 
-    private String firstSpotValueDate(List<KursRateDTO> rates) {
+    private String firstValueDate(List<KursRateDTO> rates) {
         if (rates == null) return null;
         return rates.stream()
-                .filter(r -> "SPOT".equalsIgnoreCase(r.getTenor()))
                 .map(KursRateDTO::getValueDate)
                 .filter(v -> v != null && !v.isBlank())
                 .findFirst()

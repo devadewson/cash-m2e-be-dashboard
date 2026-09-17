@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -28,9 +29,20 @@ public class SftpDataMartService {
         return running.get();
     }
 
+    //Cron Job Triger
+    @Scheduled(cron = "${job.sftp-datamart.cron:-}", zone = "Asia/Jakarta")
+    public void scheduledRun() {
+        log.info("[SFTP] Scheduled run triggered");
+        try {
+            long elapsed = execute();
+            log.info("[SFTP] Scheduled run finished in {} ms", elapsed);
+        } catch (Exception e) {
+            log.error("[SFTP] Scheduled run failed", e);
+        }
+    }
     @PostConstruct
     public void init() {
-        log.info("SFTP Service started - manual trigger only");
+        log.info("SFTP Service started - manual trigger + scheduled");
     }
     public long execute() {
         if (!running.compareAndSet(false, true)) {

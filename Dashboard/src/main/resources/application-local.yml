@@ -6,7 +6,7 @@ spring:
     type: redis
 
   datasource:
-    url: jdbc:oracle:thin:@10.235.84.41:1771:SSO
+    url: jdbc:oracle:thin:@10.235.84.104:1771:SSO
     username: SSOPORTAL
     password: P0rt4l#m2e
     driver-class-name: oracle.jdbc.driver.OracleDriver
@@ -77,6 +77,8 @@ integration:
 rate:
   api:
     url: https://erate-dev.maybank.co.id:8668
+    tenor: TODAY
+    client-name: M2U_270
 
 springdoc:
   api-docs:
@@ -86,3 +88,11 @@ springdoc:
     path: /swagger-ui.html
     doc-expansion: none
     tagsSorter: alpha
+job:
+  kurs-history:
+    cron: "0 0 8 * * *"
+  asset-snapshot:
+    cron: "0 5 8 * * *"
+  sftp-datamart:
+    cron: "0 10 8 * * *"
+

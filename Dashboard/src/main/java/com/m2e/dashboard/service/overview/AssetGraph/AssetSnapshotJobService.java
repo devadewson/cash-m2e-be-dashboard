@@ -17,6 +17,7 @@ import com.m2e.dashboard.sp.deposit.ca.response.DepositAcctSummarySpDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -53,6 +54,14 @@ public class AssetSnapshotJobService {
         return running.get();
     }
 
+    //Cron Job Triger
+    @Scheduled(cron = "${job.asset-snapshot.cron:-}", zone = "Asia/Jakarta")
+    public void scheduledRun() {
+        log.info("[SNAPSHOT] Scheduled run triggered");
+        JobRunResultDTO result = execute();
+        log.info("[SNAPSHOT] Scheduled run finished: status={} inserted={} failed={}",
+                result.getStatus(), result.getInsertedCount(), result.getFailedCount());
+    }
 
     /** Sinkron. Balik setelah semua CIF selesai diproses. */
     public JobRunResultDTO execute() {

@@ -12,10 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Membangun rate map dari data Trapi.
- * Konversi didelegasikan ke GraphCurrencyConverter.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -23,21 +19,14 @@ public class CurrencyConverterService {
 
     private final GraphCurrencyConverter graphConverter;
 
-    /** Prioritas client. Angka kecil menang. Client di luar daftar dapat prioritas terendah. */
-    private static final Map<String, Integer> CLIENT_PRIORITY = Map.of(
-            "M2U_270", 1,
-            "M2U_EM", 2,
-            "M2U_PG", 3,
-            "M2U_PW", 4,
-            "GMS-TRAPI_270", 5);
+    private static final String TENOR_TODAY = "TODAY";
 
     /**
      * Build rate map dari data kurs. Key "{FROM}.{TO}", value bidAllIn.
-     * Hanya SPOT dengan bidState dan askState aktif.
+     * Baris tanpa rate atau dengan state tidak aktif dilewati.
      */
     public Map<String, BigDecimal> buildRateMap(List<KursRateDTO> kursRates) {
         Map<String, BigDecimal> rateMap = new HashMap<>();
-        Map<String, Integer> bestPriority = new HashMap<>();
 
         if (kursRates == null || kursRates.isEmpty()) {
             log.warn("Kurs list kosong, rate map kosong");
@@ -53,20 +42,18 @@ public class CurrencyConverterService {
             }
 
             String pairKey = rate.getCcy().trim().toUpperCase();
-            int priority = CLIENT_PRIORITY.getOrDefault(rate.getClientName(), Integer.MAX_VALUE);
-
-            Integer current = bestPriority.get(pairKey);
-            if (current != null && priority >= current) {
-                continue;
-            }
-
             BigDecimal value = parseRate(rate.getBidAllIn(), pairKey);
+
             if (value == null) {
+                skipped++;
                 continue;
             }
 
-            rateMap.put(pairKey, value);
-            bestPriority.put(pairKey, priority);
+            BigDecimal existing = rateMap.put(pairKey, value);
+            if (existing != null && existing.compareTo(value) != 0) {
+                log.warn("Pair {} muncul lebih dari sekali dengan nilai berbeda: {} lalu {}. "
+                        + "Yang terakhir dipakai.", pairKey, existing, value);
+            }
         }
 
         log.info("Rate map built: {} pairs ({} baris di-skip)", rateMap.size(), skipped);
@@ -75,7 +62,7 @@ public class CurrencyConverterService {
 
     /**
      * @deprecated Pakai GraphCurrencyConverter.convert langsung.
-     * Mengembalikan null kalau rate tidak ditemukan, bukan ZERO.
+     * Mengembalikan null kalau rate tidak ditemukan
      */
     @Deprecated
     public BigDecimal convert(BigDecimal amount, String fromCurrency, String toCurrency,
@@ -98,7 +85,7 @@ public class CurrencyConverterService {
     private boolean isValidRate(KursRateDTO rate) {
         if (rate == null) return false;
         if (rate.getCcy() == null || rate.getCcy().isBlank()) return false;
-        if (!"SPOT".equalsIgnoreCase(rate.getTenor())) return false;
+        if (!TENOR_TODAY.equalsIgnoreCase(rate.getTenor())) return false;
         if (!"true".equalsIgnoreCase(rate.getBidState())) return false;
         if (!"true".equalsIgnoreCase(rate.getAskState())) return false;
         return rate.getBidAllIn() != null && !rate.getBidAllIn().isBlank();
