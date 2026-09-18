@@ -1,5 +1,6 @@
 package com.m2e.dashboard.repository;
 
+import com.m2e.dashboard.dto.trade.TradeOutstandingByCifProjection;
 import com.m2e.dashboard.projection.DatamartListingProjection;
 import com.m2e.dashboard.dto.trade.TradeAcctStatsByCurrencyProjection;
 import com.m2e.dashboard.dto.trade.TradeOutstandingByProductProjection;
@@ -81,5 +82,23 @@ public interface DatamartAgreementRepository extends JpaRepository<DatamartAgree
             @Param("startOfDay") LocalDateTime startOfDay,
             @Param("endOfDay") LocalDateTime endOfDay,
             Pageable pageable
+    );
+
+    /** Outstanding trade seluruh CIF untuk satu tanggal, dikelompokkan per CIF dan currency. */
+    @Query("""
+        SELECT new com.m2e.dashboard.dto.trade.TradeOutstandingByCifProjection(
+            d.facility,
+            d.currency,
+            COALESCE(SUM(d.outstandingAmount), 0)
+        )
+        FROM DatamartAgreement d
+        WHERE d.processDate >= :startOfDay
+          AND d.processDate < :endOfDay
+          AND d.facility IS NOT NULL
+        GROUP BY d.facility, d.currency
+        """)
+    List<TradeOutstandingByCifProjection> getAllOutstandingGroupedByCif(
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay
     );
 }
