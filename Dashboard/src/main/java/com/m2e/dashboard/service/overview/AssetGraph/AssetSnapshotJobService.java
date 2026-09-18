@@ -1,47 +1,56 @@
 package com.m2e.dashboard.service.overview.AssetGraph;
 
-import com.m2e.dashboard.repository.CorpCIFRepository;
+import com.m2e.dashboard.dto.overview.Refactor.JobRunResultDTO;
 import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.response.OverviewSubResDTO;
+import com.m2e.dashboard.dto.trade.TradeOutstandingByCifProjection;
 import com.m2e.dashboard.enums.OvSubProductEnum;
 import com.m2e.dashboard.model.BTS.Request.Summary;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
 import com.m2e.dashboard.model.Overview.AssetSnapshotEntity;
-import com.m2e.dashboard.dto.overview.Refactor.JobRunResultDTO;
-import com.m2e.dashboard.model.Trapi.Response.KursRateDTO;
+import com.m2e.dashboard.repository.CorpCIFRepository;
+import com.m2e.dashboard.repository.DatamartAgreementRepository;
 import com.m2e.dashboard.service.deposit.ca.Rest.BTSAccountClient;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
-import com.m2e.dashboard.service.overview.Refactor.CurrencyConverterService;
 import com.m2e.dashboard.service.overview.Refactor.DepositAccountMapper;
 import com.m2e.dashboard.sp.deposit.ca.response.DepositAcctSummarySpDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Job snapshot harian.
+ *
+ * Asset  : saldo deposit dari BTS, dikonversi ke IDR.
+ * Liabilities : outstanding trade dari DATAMART_AGREEMENT, dikonversi ke IDR.
+ *
+ * Keduanya memakai kurs yang sama dan disimpan dalam satu baris per CIF per tanggal.
+ * Job SFTP harus sudah jalan lebih dulu agar DATAMART berisi data hari ini.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AssetSnapshotJobService {
 
     private final KursResolver kursResolver;
-    private final CurrencyConverterService currencyConverterService;
     private final GraphCurrencyConverter graphConverter;
     private final DepositAccountMapper accountMapper;
     private final BTSAccountClient btsAccountClient;
     private final AssetSnapshotWriter writer;
-
     private final CorpCIFRepository corpCifRepository;
+    private final DatamartAgreementRepository datamartAgreementRepository;
 
     private static final String BTS_USER_ID = "1234";
     private static final String IDR = "IDR";
@@ -54,7 +63,7 @@ public class AssetSnapshotJobService {
         return running.get();
     }
 
-    //Cron Job Triger
+    // Cron Job Trigger
     @Scheduled(cron = "${job.asset-snapshot.cron:-}", zone = "Asia/Jakarta")
     public void scheduledRun() {
         log.info("[SNAPSHOT] Scheduled run triggered");
@@ -119,13 +128,18 @@ public class AssetSnapshotJobService {
         result.setKursValueDate(kursValueDate);
         log.info("[SNAPSHOT] Kurs source={} pairs={} valueDate={} age={}h",
                 kurs.getSource(), rateMap.size(), kursValueDate, kurs.getAgeHours());
+
+        // Outstanding trade seluruh CIF, diambil sekali lalu dikonversi ke IDR
+        Map<String, BigDecimal> tradeByCif = loadTradeOutstanding(snapshotDate, rateMap);
+        log.info("[SNAPSHOT] Trade outstanding tersedia untuk {} CIF", tradeByCif.size());
+
         List<String> cifList = corpCifRepository.findAllCifNo();
         result.setTotalCif(cifList.size());
         log.info("[SNAPSHOT] {} distinct CIF to process", cifList.size());
 
         if (cifList.isEmpty()) {
             result.setStatus("NO_DATA");
-            result.setMessage("Tidak ada CIF ditemukan di TB_CORP_USR");
+            result.setMessage("Tidak ada CIF ditemukan di TBL_CORP");
             result.setInsertedCount(0);
             result.setSuccessCount(0);
             result.setPartialCount(0);
@@ -140,7 +154,8 @@ public class AssetSnapshotJobService {
             processed++;
             try {
                 AssetSnapshotEntity entity = buildSnapshot(
-                        cif, snapshotDate, rateMap, kursValueDate, result.getJobRunId());
+                        cif, snapshotDate, rateMap, kursValueDate,
+                        result.getJobRunId(), tradeByCif);
                 writer.upsert(entity);
 
                 switch (entity.getSourceStatus()) {
@@ -190,9 +205,66 @@ public class AssetSnapshotJobService {
                 inserted, success, partial, empty, failed);
     }
 
+    /**
+     * Ambil outstanding trade seluruh CIF untuk tanggal snapshot dari Datamart Agreement,
+     * konversi ke IDR, kelompokkan per CIF.
+     */
+    private Map<String, BigDecimal> loadTradeOutstanding(
+            LocalDate snapshotDate, Map<String, BigDecimal> rateMap) {
+
+        Map<String, BigDecimal> tradeByCif = new HashMap<>();
+
+        try {
+            LocalDateTime startOfDay = snapshotDate.atStartOfDay();
+            LocalDateTime endOfDay = snapshotDate.plusDays(1).atStartOfDay();
+
+            List<TradeOutstandingByCifProjection> rows =
+                    datamartAgreementRepository.getAllOutstandingGroupedByCif(startOfDay, endOfDay);
+
+            if (rows.isEmpty()) {
+                log.warn("[SNAPSHOT] Tidak ada data trade untuk tanggal {}. "
+                        + "Cek apakah job SFTP sudah jalan hari ini.", snapshotDate);
+                return tradeByCif;
+            }
+
+            int converted = 0;
+            int failed = 0;
+
+            for (TradeOutstandingByCifProjection row : rows) {
+                BigDecimal amount = row.getTotalOutstandingBal() != null
+                        ? row.getTotalOutstandingBal() : BigDecimal.ZERO;
+
+                if (amount.signum() == 0) {
+                    continue;
+                }
+
+                BigDecimal idr = graphConverter.toIdr(amount, row.getCurrency(), rateMap);
+
+                if (idr == null) {
+                    failed++;
+                    log.error("[SNAPSHOT] Gagal konversi trade {} {} -> IDR untuk cif={}",
+                            amount, row.getCurrency(), row.getCifNo());
+                    continue;
+                }
+
+                tradeByCif.merge(row.getCifNo(), idr, BigDecimal::add);
+                converted++;
+            }
+
+            log.info("[SNAPSHOT] Trade: {} baris dikonversi, {} gagal, dari {} grup",
+                    converted, failed, rows.size());
+
+        } catch (Exception e) {
+            log.error("[SNAPSHOT] Gagal ambil trade outstanding: {}", e.getMessage(), e);
+        }
+
+        return tradeByCif;
+    }
+
     private AssetSnapshotEntity buildSnapshot(String cif, LocalDate snapshotDate,
                                               Map<String, BigDecimal> rateMap,
-                                              String kursValueDate, String jobRunId) {
+                                              String kursValueDate, String jobRunId,
+                                              Map<String, BigDecimal> tradeByCif) {
 
         List<DepositAcctSummarySpDTO> btsAccounts = fetchFromBts(cif);
         List<OverviewSubResDTO> mapped = accountMapper.mapAll(btsAccounts);
@@ -228,6 +300,8 @@ public class AssetSnapshotJobService {
         BigDecimal totalAsset = totalCa.add(totalMfca).add(totalFca)
                 .add(totalFd).add(totalTd).add(totalVa).add(totalOther);
 
+        BigDecimal totalLiabilities = tradeByCif.getOrDefault(cif, BigDecimal.ZERO);
+
         AssetSnapshotEntity e = new AssetSnapshotEntity();
         e.setSnapshotDate(snapshotDate);
         e.setCorpCifNo(cif);
@@ -236,7 +310,7 @@ public class AssetSnapshotJobService {
         e.setQuarterKey(GraphPeriodUtil.quarterKey(snapshotDate));
         e.setCurrency(IDR);
         e.setTotalAsset(totalAsset);
-        e.setTotalLiabilities(BigDecimal.ZERO);
+        e.setTotalLiabilities(totalLiabilities);
         e.setTotalCa(totalCa);
         e.setTotalMfca(totalMfca);
         e.setTotalFca(totalFca);
@@ -285,15 +359,5 @@ public class AssetSnapshotJobService {
             });
         });
         return accounts;
-    }
-
-    private String resolveSpotValueDate(List<KursRateDTO> rates) {
-        if (rates == null) return null;
-        return rates.stream()
-                .filter(r -> "SPOT".equalsIgnoreCase(r.getTenor()))
-                .map(KursRateDTO::getValueDate)
-                .filter(v -> v != null && !v.isBlank())
-                .findFirst()
-                .orElse(null);
     }
 }
