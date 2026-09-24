@@ -269,7 +269,8 @@ public class AssetSnapshotJobService {
         List<DepositAcctSummarySpDTO> btsAccounts = fetchFromBts(cif);
         List<OverviewSubResDTO> mapped = accountMapper.mapAll(btsAccounts);
 
-        BigDecimal totalCa = BigDecimal.ZERO, totalMfca = BigDecimal.ZERO;
+        BigDecimal totalCa = BigDecimal.ZERO, totalSa = BigDecimal.ZERO;
+        BigDecimal totalMfca = BigDecimal.ZERO;
         BigDecimal totalFca = BigDecimal.ZERO, totalFd = BigDecimal.ZERO;
         BigDecimal totalTd = BigDecimal.ZERO, totalVa = BigDecimal.ZERO;
         BigDecimal totalOther = BigDecimal.ZERO;
@@ -288,6 +289,7 @@ public class AssetSnapshotJobService {
             }
             switch (sub) {
                 case CA:   totalCa   = totalCa.add(idr);   break;
+                case SA:   totalSa   = totalSa.add(idr);   break;
                 case MFCA: totalMfca = totalMfca.add(idr); break;
                 case FCA:  totalFca  = totalFca.add(idr);  break;
                 case FD:   totalFd   = totalFd.add(idr);   break;
@@ -297,8 +299,11 @@ public class AssetSnapshotJobService {
             }
         }
 
-        BigDecimal totalAsset = totalCa.add(totalMfca).add(totalFca)
-                .add(totalFd).add(totalTd).add(totalVa).add(totalOther);
+        // Total Asset: CA + SA + FCA
+        BigDecimal totalAsset = totalCa.add(totalSa).add(totalFca);
+
+//        BigDecimal totalAsset = totalCa.add(totalMfca).add(totalFca)
+//                .add(totalFd).add(totalTd).add(totalVa).add(totalOther);
 
         BigDecimal totalLiabilities = tradeByCif.getOrDefault(cif, BigDecimal.ZERO);
 
