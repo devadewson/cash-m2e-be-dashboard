@@ -45,6 +45,7 @@ public class AssetSnapshotEntity {
 
     @Column(name = "TOTAL_CA",       precision = 30, scale = 6) private BigDecimal totalCa;
     @Column(name = "TOTAL_MFCA",     precision = 30, scale = 6) private BigDecimal totalMfca;
+    @Column(name = "TOTAL_SA", precision = 30, scale = 6) private BigDecimal totalSa;
     @Column(name = "TOTAL_FCA",      precision = 30, scale = 6) private BigDecimal totalFca;
     @Column(name = "TOTAL_FD",       precision = 30, scale = 6) private BigDecimal totalFd;
     @Column(name = "TOTAL_TD",       precision = 30, scale = 6) private BigDecimal totalTd;

@@ -74,11 +74,6 @@ integration:
   bts-url: http://10.230.83.144:10003/bts
   esb-account-url: http://10.235.66.96:8800/id/mbi
 
-rate:
-  api:
-    url: https://erate-dev.maybank.co.id:8668
-    tenor: TODAY
-    client-name: M2U_270
 
 springdoc:
   api-docs:
@@ -88,6 +83,13 @@ springdoc:
     path: /swagger-ui.html
     doc-expansion: none
     tagsSorter: alpha
+
+rate:
+  api:
+    url: https://erate-dev.maybank.co.id:8668
+    tenor: TODAY
+    client-name: M2U_270
+
 job:
   kurs-history:
     cron: "0 0 8 * * *"
@@ -95,3 +97,4 @@ job:
     cron: "0 5 8 * * *"
   asset-snapshot:
     cron: "0 20 8 * * *"
+
