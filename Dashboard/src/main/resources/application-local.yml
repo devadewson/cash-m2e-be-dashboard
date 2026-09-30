@@ -92,7 +92,7 @@ rate:
 
 job:
   kurs-history:
-    cron: "0 0 8 * * *"
+    cron: "0 0 15 * * *"
   sftp-datamart:
     cron: "0 5 8 * * *"
   asset-snapshot:

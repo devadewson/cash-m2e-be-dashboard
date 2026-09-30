@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +24,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+/**
+ * Grafik asset dan liabilities dari TB_OV_ASSET_SNAPSHOT.
+ *
+ * Data terakhir yang dipakai adalah H-1, bukan hari ini, karena job snapshot
+ * hari berjalan bisa belum selesai. Seluruh perhitungan periode berangkat dari
+ * toDate yang sama
+ * W  : 5 minggu yang berakhir di toDate, minggu ISO Senin sampai Minggu
+ * M  : Januari sampai bulan dari toDate
+ * Q  : Q1 sampai kuartal dari toDate
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -36,9 +45,7 @@ public class AssetGraphService {
     private final CorpCifResolver corpCifResolver;
 
     private static final String IDR = "IDR";
-    private static final int WEEK_COUNT = 8;
-    private static final int MONTH_COUNT = 12;
-    private static final int QUARTER_COUNT = 8;
+    private static final int WEEK_COUNT = 5;
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MMM-yyyy");
 
     public ApiResponse<AssetLiabilitiesGraphResDTO> getAssetGraph(
@@ -53,8 +60,11 @@ public class AssetGraphService {
         String targetCurrency = (request.getBaseCurrency() != null && !request.getBaseCurrency().isBlank())
                 ? request.getBaseCurrency().trim().toUpperCase() : IDR;
 
-        log.info("[GRAPH] cif={} interval={} currency={}",
-                cif, request.getInterval(), targetCurrency);
+        // Data terakhir = kemarin. Dipakai sebagai anchor seluruh perhitungan periode.
+        LocalDate toDate = LocalDate.now().minusDays(1);
+
+        log.info("[GRAPH] cif={} interval={} currency={} toDate={}",
+                cif, request.getInterval(), targetCurrency, toDate);
 
         List<String> periodKeys;
         Function<AssetSnapshotEntity, String> keyExtractor;
@@ -62,19 +72,19 @@ public class AssetGraphService {
 
         switch (request.getInterval()) {
             case W -> {
-                periodKeys = GraphPeriodUtil.lastWeekKeys(WEEK_COUNT);
+                periodKeys = GraphPeriodUtil.weekKeysEndingAt(toDate, WEEK_COUNT);
                 keyExtractor = AssetSnapshotEntity::getWeekKey;
-                fromDate = LocalDate.now().minusWeeks(WEEK_COUNT);
+                fromDate = GraphPeriodUtil.firstMondayEndingAt(toDate, WEEK_COUNT);
             }
             case M -> {
-                periodKeys = GraphPeriodUtil.lastMonthKeys(MONTH_COUNT);
+                periodKeys = GraphPeriodUtil.monthKeysYearToDate(toDate);
                 keyExtractor = AssetSnapshotEntity::getMonthKey;
-                fromDate = LocalDate.now().minusMonths(MONTH_COUNT);
+                fromDate = GraphPeriodUtil.firstDayOfYear(toDate);
             }
             case Q -> {
-                periodKeys = GraphPeriodUtil.lastQuarterKeys(QUARTER_COUNT);
+                periodKeys = GraphPeriodUtil.quarterKeysYearToDate(toDate);
                 keyExtractor = AssetSnapshotEntity::getQuarterKey;
-                fromDate = LocalDate.now().minusMonths(QUARTER_COUNT * 3L);
+                fromDate = GraphPeriodUtil.firstDayOfYear(toDate);
             }
             default -> {
                 log.warn("[GRAPH] Interval tidak dikenal: {}", request.getInterval());
@@ -82,11 +92,11 @@ public class AssetGraphService {
             }
         }
 
-        List<AssetSnapshotEntity> rows = repository.findForGraph(cif, fromDate);
+        List<AssetSnapshotEntity> rows = repository.findForGraph(cif, fromDate, toDate);
 
         if (rows.isEmpty()) {
-            log.warn("[GRAPH] Tidak ada snapshot untuk cif={} sejak {}. "
-                    + "Cek apakah job snapshot sudah jalan.", cif, fromDate);
+            log.warn("[GRAPH] Tidak ada snapshot untuk cif={} antara {} dan {}. "
+                    + "Cek apakah job snapshot sudah jalan.", cif, fromDate, toDate);
         }
 
         // Posisi terakhir per periode (rows sudah ORDER BY snapshotDate ASC)
@@ -135,7 +145,7 @@ public class AssetGraphService {
         AssetLiabilitiesGraphResDTO body = new AssetLiabilitiesGraphResDTO();
         body.setAssetGraph(points);
         body.setCurrency(targetCurrency);
-        body.setLastUpdatedDate(OffsetDateTime.now().minusDays(1).format(DATE_FORMAT));
+        body.setLastUpdatedDate(toDate.format(DATE_FORMAT));
 
         ApiResponse<AssetLiabilitiesGraphResDTO> response = new ApiResponse<>();
         response.setMsgHeader(new ErrorResponse("0"));
