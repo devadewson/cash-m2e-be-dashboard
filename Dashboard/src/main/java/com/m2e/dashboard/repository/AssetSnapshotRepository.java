@@ -17,10 +17,12 @@ public interface AssetSnapshotRepository extends JpaRepository<AssetSnapshotEnti
     @Query("SELECT s FROM AssetSnapshotEntity s " +
             "WHERE s.corpCifNo = :cif " +
             "AND s.snapshotDate >= :fromDate " +
+            "AND s.snapshotDate <= :toDate " +
             "AND s.sourceStatus = 'SUCCESS' " +
             "ORDER BY s.snapshotDate ASC")
     List<AssetSnapshotEntity> findForGraph(@Param("cif") String cif,
-                                           @Param("fromDate") LocalDate fromDate);
+                                           @Param("fromDate") LocalDate fromDate,
+                                           @Param("toDate") LocalDate toDate);
 
     @Modifying
     @Query("DELETE FROM AssetSnapshotEntity s " +
