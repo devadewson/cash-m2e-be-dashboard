@@ -8,6 +8,7 @@ import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.request.AssetLiabilitiesGraphReqDTO;
 import com.m2e.dashboard.dto.overview.response.AssetLiabilitiesGraphResDTO;
 import com.m2e.dashboard.dto.overview.response.AssetLiabilitiesGraphSubResDTO;
+import com.m2e.dashboard.enums.GraphEnum;
 import com.m2e.dashboard.model.Overview.AssetSnapshotEntity;
 import com.m2e.dashboard.repository.AssetSnapshotRepository;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
@@ -133,7 +134,7 @@ public class AssetGraphService {
             }
 
             AssetLiabilitiesGraphSubResDTO point = new AssetLiabilitiesGraphSubResDTO();
-            point.setLabel(periodKey);
+            point.setLabel(buildLabel(request.getInterval(), periodKey, row, toDate));
             point.setAssets(asset);
             point.setLiabilities(liab);
             points.add(point);
@@ -158,5 +159,13 @@ public class AssetGraphService {
         ApiResponse<AssetLiabilitiesGraphResDTO> response = new ApiResponse<>();
         response.setMsgHeader(new ErrorResponse("99"));
         return response;
+    }
+    /** Weekly memakai rentang tanggal, monthly dan quarterly tetap memakai key. */
+    private String buildLabel(GraphEnum interval, String periodKey,
+                              AssetSnapshotEntity row, LocalDate toDate) {
+        if (interval == GraphEnum.W) {
+            return GraphPeriodUtil.weekRangeLabel(row.getSnapshotDate(), toDate);
+        }
+        return periodKey;
     }
 }

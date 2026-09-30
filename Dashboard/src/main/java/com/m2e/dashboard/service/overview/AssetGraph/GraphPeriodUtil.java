@@ -2,12 +2,13 @@ package com.m2e.dashboard.service.overview.AssetGraph;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Perhitungan key periode untuk snapshot dan grafik.
+ * Perhitungan key dan label periode untuk snapshot dan grafik.
  *
  * Minggu memakai standar ISO-8601: Senin sampai Minggu, dan tahun dihitung
  * dengan WEEK_BASED_YEAR agar pergantian tahun tidak menghasilkan key salah.
@@ -15,6 +16,9 @@ import java.util.List;
 public final class GraphPeriodUtil {
 
     private GraphPeriodUtil() {}
+
+    private static final DateTimeFormatter LABEL_DATE =
+            DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     // ==================== KEY DARI SATU TANGGAL ====================
 
@@ -73,5 +77,24 @@ public final class GraphPeriodUtil {
     /** 1 Januari tahun dari endDate. */
     public static LocalDate firstDayOfYear(LocalDate endDate) {
         return endDate.withDayOfYear(1);
+    }
+
+    // ==================== LABEL ====================
+
+    /**
+     * Label rentang minggu untuk grafik, dipotong di endDate bila minggu belum selesai.
+     *
+     * Minggu penuh    : "21-09-2026 - 27-09-2026"
+     * Minggu berjalan : "28-09-2026 - 29-09-2026"
+     */
+    public static String weekRangeLabel(LocalDate anyDayInWeek, LocalDate endDate) {
+        LocalDate start = anyDayInWeek.with(DayOfWeek.MONDAY);
+        LocalDate end = anyDayInWeek.with(DayOfWeek.SUNDAY);
+
+        if (end.isAfter(endDate)) {
+            end = endDate;
+        }
+
+        return start.format(LABEL_DATE) + " - " + end.format(LABEL_DATE);
     }
 }
