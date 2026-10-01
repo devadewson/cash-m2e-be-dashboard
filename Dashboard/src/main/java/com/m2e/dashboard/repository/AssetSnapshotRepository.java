@@ -11,18 +11,18 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 
-@Repository
-public interface AssetSnapshotRepository extends JpaRepository<AssetSnapshotEntity, Long> {
+                                           @Repository
+                                           public interface AssetSnapshotRepository extends JpaRepository<AssetSnapshotEntity, Long> {
 
-    @Query("SELECT s FROM AssetSnapshotEntity s " +
-            "WHERE s.corpCifNo = :cif " +
-            "AND s.snapshotDate >= :fromDate " +
-            "AND s.snapshotDate <= :toDate " +
-            "AND s.sourceStatus = 'SUCCESS' " +
-            "ORDER BY s.snapshotDate ASC")
-    List<AssetSnapshotEntity> findForGraph(@Param("cif") String cif,
-                                           @Param("fromDate") LocalDate fromDate,
-                                           @Param("toDate") LocalDate toDate);
+        @Query("SELECT s FROM AssetSnapshotEntity s " +
+                "WHERE s.corpCifNo = :cif " +
+                "AND s.snapshotDate >= :fromDate " +
+                "AND s.snapshotDate <= :toDate " +
+                "AND s.sourceStatus = 'SUCCESS' " +
+                "ORDER BY s.snapshotDate ASC")
+        List<AssetSnapshotEntity> findForGraph(@Param("cif") String cif,
+                @Param("fromDate") LocalDate fromDate,
+                @Param("toDate") LocalDate toDate);
 
     @Modifying
     @Query("DELETE FROM AssetSnapshotEntity s " +

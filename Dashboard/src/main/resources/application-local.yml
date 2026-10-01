@@ -71,7 +71,7 @@ logger:
   path: C:\app\cfo\Dashboard\logs
 
 integration:
-  bts-url: http://10.230.83.144:10003/bts
+  bts-url: http://10.230.83.144:10004/bts
   esb-account-url: http://10.235.66.96:8800/id/mbi
 
 
