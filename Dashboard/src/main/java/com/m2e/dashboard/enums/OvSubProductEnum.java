@@ -44,6 +44,8 @@ public enum OvSubProductEnum implements OverviewService.Order {
     IMPORT_LC_SKBDN("ILS", "Import LC/SKBDN"),
     GUARANTEE("G", "Guarantee/SBLC"),
     TRADE_FINANCING("TF", "Trade Financing"),
+    IMPORT_LC_SKBDN_ACCEPTANCE("ILSACC", "Import LC/SKBDN Acceptance"),
+    EXPORT_LC_SKBDN_ACCEPTANCE("ELSACC", "Export LC/SKBDN Acceptance"),
 
     //Cards
     CRC("CRC","Credit Card"),
@@ -96,11 +98,12 @@ public enum OvSubProductEnum implements OverviewService.Order {
     public enum TradeBucket { IMPORT, EXPORT, GUARANTEE, FINANCING, NONE }
 
     private static final Set<OvSubProductEnum> BUCKET_IMPORT =
-            EnumSet.of(IMPORT_LC_SKBDN, INCOMING_COLLECTION);
+            EnumSet.of(IMPORT_LC_SKBDN, INCOMING_COLLECTION, IMPORT_LC_SKBDN_ACCEPTANCE);
 
     private static final Set<OvSubProductEnum> BUCKET_EXPORT =
             EnumSet.of(OUTGOING_COLLECTION, EXPORT_LC_SKBDN_COLLECTION,
-                    EXPORT_LC_SKBDN_ADVISING, EXPORT_LC_SKBDN_NEGOTIATION);
+                    EXPORT_LC_SKBDN_ADVISING, EXPORT_LC_SKBDN_NEGOTIATION,
+                    EXPORT_LC_SKBDN_ACCEPTANCE);
 
     private static final Set<OvSubProductEnum> BUCKET_GUARANTEE =
             EnumSet.of(GUARANTEE, GUARANTEE_ADVISING);

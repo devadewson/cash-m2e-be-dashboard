@@ -17,6 +17,9 @@ public enum TradeEnum {
     IMPORT_LC_SKBDN("ILS", "Import LC/SKBDN"),
     GUARANTEE("G", "Guarantee/SBLC"),
     TRADE_FINANCING("TF", "Trade Financing"),
+    EXPORT_LC_SKBDN_ACCEPTANCE("ELSACC", "Export LC/SKBDN Acceptance"),
+    IMPORT_LC_SKBDN_ACCEPTANCE("ILSACC", "Import LC/SKBDN Acceptance"),
+
     ALL("", "");
     private final String category;
     private final String acctType;
