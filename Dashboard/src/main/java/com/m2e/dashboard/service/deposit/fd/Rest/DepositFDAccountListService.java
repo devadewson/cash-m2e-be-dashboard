@@ -1,205 +1,145 @@
 package com.m2e.dashboard.service.deposit.fd.Rest;
 
+import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.base.AccountListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
+import com.m2e.dashboard.dto.common.SearchCollectionResponse;
 import com.m2e.dashboard.dto.deposit.ca.response.DepositAcctListingDTO;
-import com.m2e.dashboard.enums.AcctTypEnum;
-import com.m2e.dashboard.model.BTS.Request.Summary;
-import com.m2e.dashboard.model.BTS.Response.Sumary.*;
-import com.m2e.dashboard.service.deposit.ca.Rest.BTSAccountClient;
+import com.m2e.dashboard.repository.DepositFdListingProjection;
+import com.m2e.dashboard.repository.DepositFdRepository;
+import com.m2e.dashboard.service.overview.Datamart.DatamartDateRange;
+import com.m2e.dashboard.service.overview.Datamart.DatamartDateResolver;
 import com.m2e.dashboard.sp.deposit.ca.response.DepositAcctSummarySpDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.math.RoundingMode;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
+/**
+ * Listing deposito berjangka dari DATAMART_DEPOSIT_FD, tanggal muat terakhir.
+ * Nilai apa adanya, tanpa konversi currency.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DepositFDAccountListService {
 
-    private final BTSAccountClient btsAccountClient;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final DepositFdRepository repository;
+    private final CorpCifResolver corpCifResolver;
+    private final DatamartDateResolver dateResolver;
 
-    // ===== REDIS CONFIG =====
-    private static final String REDIS_KEY_PREFIX = "deposit-fd-account-list::";
-    private static final long CACHE_TTL_MINUTES = 5;
+    private static final String CODE_SUCCESS = "0";
+    private static final String CODE_FAILED = "1";
+    private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    /**
-     * FIXED DEPOSIT ACCOUNT LIST - MAIN FLOW (WITH REDIS CACHE)
-     */
-    public ApiResponse<DepositAcctListingDTO> getAccountList(
-            UserAndCorp user,
-            AccountListReq req) {
+    @Cacheable(
+            value = "deposit-fd-account-list",
+            key = "#user.corpId + '_' + #req.page + '_' + #req.pageSize + '_' "
+                    + "+ T(java.time.LocalDate).now()",
+            unless = "#result == null || #result.msgBody == null"
+    )
+    public ApiResponse<DepositAcctListingDTO> getAccountList(UserAndCorp user, AccountListReq req) {
 
-        log.info("START getAccountList | CIF={} | userId={}",
-                req.getCorpCifNo(), user.getUserId());
-
-        // ===== STEP 1: BUILD REDIS KEY =====
-        String redisKey = REDIS_KEY_PREFIX + user.getUserId() + "_" + req.getCorpCifNo();
-        log.debug("Redis Key: {}", redisKey);
-
-        // ===== STEP 2: CHECK REDIS CACHE =====
-        DepositAcctListingDTO cachedResult = getFromCache(redisKey);
-        if (cachedResult != null) {
-            log.info("FD Account List found in Redis: {}", redisKey);
-            return success(cachedResult);
+        String cifNo;
+        try {
+            cifNo = corpCifResolver.resolveCif(user.getCorpId());
+        } catch (Exception e) {
+            log.error("[FD-List] CIF gagal di-resolve corpId={}: {}", user.getCorpId(), e.getMessage());
+            return failure("CIF tidak ditemukan untuk korporasi ini");
         }
 
-        log.info("FD Account List NOT in Redis: {}. Fetching from BTS...", redisKey);
-
         try {
-            // ===== STEP 3: BUILD BTS REQUEST =====
-            Summary request = buildBTSRequest(user, req);
-            log.info("BTS Request built | userId={} | cif={}",
-                    request.getUserId(), request.getCif());
+            // FE mengirim page mulai 0, sesuai PageRequest
+            Pageable pageable = toPageable(req.getPage(), req.getPageSize());
 
-            // ===== STEP 4: CALL BTS =====
-            log.info("Calling BTS Account Summary...");
-            SummaryResponse btsResp = btsAccountClient.getAccountSummary(request);
-            log.info("BTS Response received successfully");
+            Page<DepositAcctSummarySpDTO> mappedPage;
+            Optional<DatamartDateRange> range = dateResolver.fd();
 
-            // ===== STEP 5: VALIDATE =====
-            validateResponse(btsResp);
+            if (range.isEmpty()) {
+                log.warn("[FD-List] Belum ada data FD di database");
+                mappedPage = Page.empty(pageable);
+            } else {
+                DatamartDateRange r = range.get();
 
-            // ===== STEP 6: MAP RESPONSE =====
-            log.info("Mapping BTS response to DTO");
-            DepositAcctListingDTO result = mapBtsToDepositListing(btsResp);
+                log.info("[FD-List] START cif={} page={} pageSize={} dataDate={}",
+                        cifNo, pageable.getPageNumber(), pageable.getPageSize(), r.dataDate());
 
-            // ===== STEP 7: SAVE TO REDIS =====
-            if (result != null && result.getDatas() != null) {
-                saveToCache(redisKey, result);
+                Page<DepositFdListingProjection> resultPage =
+                        repository.getListing(cifNo, r.startOfDay(), r.endOfDay(), pageable);
+
+                mappedPage = resultPage.map(this::toDto);
             }
 
-            return success(result);
+            SearchCollectionResponse<DepositAcctSummarySpDTO> result = new SearchCollectionResponse<>(mappedPage);
 
-        } catch (Exception ex) {
-            log.error("FAILED getAccountList | CIF={} | userId={}",
-                    req.getCorpCifNo(), user.getUserId(), ex);
-            throw new RuntimeException(
-                    "Failed to retrieve FD Account List from BTS", ex);
-        }
-    }
+            DepositAcctListingDTO dto = new DepositAcctListingDTO();
+            dto.setCorpCifNo(cifNo);
+            dto.setDatas(result);
 
-    /**
-     * GET FROM REDIS CACHE
-     */
-    private DepositAcctListingDTO getFromCache(String key) {
-        try {
-            Object cached = redisTemplate.opsForValue().get(key);
-            if (cached instanceof DepositAcctListingDTO) {
-                log.debug("Cache hit: {}", key);
-                return (DepositAcctListingDTO) cached;
-            }
+            log.info("[FD-List] SUCCESS cif={} page={} totalRecords={}",
+                    cifNo, pageable.getPageNumber(), result.getTotalRecordCount());
+
+            return success(dto);
+
         } catch (Exception e) {
-            log.warn("Failed to get from Redis cache: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * SAVE TO REDIS CACHE
-     */
-    private void saveToCache(String key, DepositAcctListingDTO data) {
-        try {
-            redisTemplate.opsForValue().set(key, data, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
-            log.info("FD Account List saved to Redis: {} (TTL: {} min)", key, CACHE_TTL_MINUTES);
-        } catch (Exception e) {
-            log.warn("Failed to save to Redis cache: {}", e.getMessage());
+            log.error("[FD-List] FAILED cif={}: {}", cifNo, e.getMessage(), e);
+            return failure("Data deposito tidak dapat diproses saat ini");
         }
     }
 
-    /**
-     * BUILD BTS REQUEST
-     */
-    private Summary buildBTSRequest(UserAndCorp user, AccountListReq reqFE) {
-        log.debug("Building BTS Request | CIF={} | userId={}",
-                reqFE.getCorpCifNo(), user.getUserId());
-
-        Summary req = new Summary();
-        req.setUserId(user.getUserId());
-        req.setCif(reqFE.getCorpCifNo());
-        req.setLocale("id_ID");
-        req.setIndicator("R");
-
-        return req;
+    private Pageable toPageable(Integer page, Integer pageSize) {
+        int p = (page == null || page < 0) ? 0 : page;
+        int size = (pageSize == null || pageSize <= 0) ? DEFAULT_PAGE_SIZE : pageSize;
+        return PageRequest.of(p, size);
     }
 
-    /**
-     * VALIDATE BTS RESPONSE
-     */
-    private void validateResponse(SummaryResponse response) {
-        log.debug("Validating BTS response...");
+    private DepositAcctSummarySpDTO toDto(DepositFdListingProjection p) {
+        DepositAcctSummarySpDTO dto = new DepositAcctSummarySpDTO();
+        dto.setAcctNumber(p.getDepositNumber());
+        dto.setCurrency(p.getCurrency());
+        dto.setAcctType("TD");
 
-        if (response == null) {
-            log.error("BTS response is NULL");
-            throw new RuntimeException("BTS response is null");
-        }
+        String principal = (p.getPrincipal() != null)
+                ? p.getPrincipal().setScale(2, RoundingMode.HALF_UP).toPlainString()
+                : "0.00";
 
-        if (response.getResponseData() == null) {
-            log.error("BTS responseData is NULL");
-            throw new RuntimeException("BTS responseData is null");
-        }
+        dto.setPrincipal(principal);
+        // Saldo deposito sama dengan pokoknya, diisi agar konsisten dengan CA dan SA
+        dto.setLedgerBalance(principal);
+        dto.setAvailableBalance(principal);
 
-        log.debug("BTS response validation PASSED");
-    }
+        dto.setTenor(p.getTenor() != null ? String.valueOf(p.getTenor()) : null);
+        // Desimal apa adanya dari host, misal "0.020000"
+        dto.setInterestRate(p.getInterestRate() != null ? p.getInterestRate().toPlainString() : null);
+        dto.setPlacementDate(p.getPlacementDate() != null ? p.getPlacementDate().format(DATE_FMT) : null);
+        dto.setMaturityDate(p.getMaturityDate() != null ? p.getMaturityDate().format(DATE_FMT) : null);
 
-    /**
-     * MAP BTS RESPONSE TO FD DEPOSIT LISTING DTO
-     */
-    private DepositAcctListingDTO mapBtsToDepositListing(SummaryResponse response) {
-        DepositAcctListingDTO dto = new DepositAcctListingDTO();
-        List<DepositAcctSummarySpDTO> accountList = new ArrayList<>();
-
-        if (response.getResponseData().getAssetList() == null) {
-            log.warn("No assetList found in BTS response");
-            return dto;
-        }
-
-        for (SummaryCategory category : response.getResponseData().getAssetList()) {
-            if (category.getProductList() == null) continue;
-
-            category.getProductList().stream()
-                    .filter(p -> AcctTypEnum.TD.name().equalsIgnoreCase(p.getAccountType()))
-                    .forEach(product -> {
-                        try {
-                            DepositAcctSummarySpDTO acc = new DepositAcctSummarySpDTO();
-                            acc.setAcctName(product.getProductName());
-                            acc.setAcctNumber(product.getAccNo());
-                            acc.setCurrency(product.getCurrencyCodeIso());
-                            acc.setLedgerBalance(product.getAmount());
-                            acc.setAvailableBalance(product.getAmount());
-                            acc.setAcctType(product.getAccountType());
-                            accountList.add(acc);
-
-                            log.debug("Mapped FD account | accNo={}", product.getAccNo());
-                        } catch (Exception mapEx) {
-                            log.error("Mapping error | accNo={}", product.getAccNo(), mapEx);
-                        }
-                    });
-        }
-
-        dto.setDatas(new com.m2e.dashboard.dto.common.SearchCollectionResponse<>(
-                1, 1, -1, accountList.size()));
-        dto.getDatas().setData(accountList);
-
-        log.info("Mapping complete | FD accounts found={}", accountList.size());
         return dto;
     }
 
-    /**
-     * BUILD SUCCESS RESPONSE
-     */
     private ApiResponse<DepositAcctListingDTO> success(DepositAcctListingDTO body) {
         ApiResponse<DepositAcctListingDTO> response = new ApiResponse<>();
-        response.setMsgHeader(new ErrorResponse("0"));
+        response.setMsgHeader(new ErrorResponse(CODE_SUCCESS));
         response.setMsgBody(body);
+        return response;
+    }
+
+    private ApiResponse<DepositAcctListingDTO> failure(String message) {
+        ErrorResponse header = new ErrorResponse(CODE_FAILED);
+        header.setErrorMessage(message);
+        ApiResponse<DepositAcctListingDTO> response = new ApiResponse<>();
+        response.setMsgHeader(header);
+        response.setMsgBody(null);
         return response;
     }
 }

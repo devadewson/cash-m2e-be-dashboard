@@ -3,16 +3,17 @@ package com.m2e.dashboard.service.overview.AssetGraph;
 import com.m2e.dashboard.dto.overview.Refactor.JobRunResultDTO;
 import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
 import com.m2e.dashboard.dto.overview.response.OverviewSubResDTO;
-import com.m2e.dashboard.dto.trade.TradeOutstandingByCifProjection;
 import com.m2e.dashboard.enums.OvSubProductEnum;
 import com.m2e.dashboard.model.BTS.Request.Summary;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
 import com.m2e.dashboard.model.Overview.AssetSnapshotEntity;
 import com.m2e.dashboard.repository.CorpCIFRepository;
-import com.m2e.dashboard.repository.DatamartAgreementRepository;
 import com.m2e.dashboard.service.deposit.ca.Rest.BTSAccountClient;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
 import com.m2e.dashboard.service.overview.Refactor.DepositAccountMapper;
+import com.m2e.dashboard.service.overview.Refactor.LiabilityBreakdown;
+import com.m2e.dashboard.service.overview.Refactor.OverviewDatamartAggregator;
+import com.m2e.dashboard.service.overview.Refactor.OverviewDatamartAggregator.AllCifResult;
 import com.m2e.dashboard.sp.deposit.ca.response.DepositAcctSummarySpDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,20 +25,20 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Job snapshot harian.
+ * Job snapshot harian. Rumus sama dengan /asset supaya grafik dan kartu overview cocok.
  *
- * Asset  : saldo deposit dari BTS, dikonversi ke IDR.
- * Liabilities : outstanding trade dari DATAMART_AGREEMENT, dikonversi ke IDR.
+ * Asset       = CA + FCA + SA (BTS) + FD (datamart)
+ * Liabilities = Trade + PRK + PB + PPB (datamart)
+ * Semua disimpan dalam IDR.
  *
- * Keduanya memakai kurs yang sama dan disimpan dalam satu baris per CIF per tanggal.
- * Job SFTP harus sudah jalan lebih dulu agar DATAMART berisi data hari ini.
+ * Query datamart gagal -> job dibatalkan, tidak ada baris ditulis.
+ * Konversi gagal untuk satu CIF -> baris CIF itu PARTIAL dan tidak tampil di grafik.
  */
 @Slf4j
 @Service
@@ -50,7 +51,7 @@ public class AssetSnapshotJobService {
     private final BTSAccountClient btsAccountClient;
     private final AssetSnapshotWriter writer;
     private final CorpCIFRepository corpCifRepository;
-    private final DatamartAgreementRepository datamartAgreementRepository;
+    private final OverviewDatamartAggregator datamartAggregator;
 
     private static final String BTS_USER_ID = "1234";
     private static final String IDR = "IDR";
@@ -63,7 +64,6 @@ public class AssetSnapshotJobService {
         return running.get();
     }
 
-    // Cron Job Trigger
     @Scheduled(cron = "${job.asset-snapshot.cron:-}", zone = "Asia/Jakarta")
     public void scheduledRun() {
         log.info("[SNAPSHOT] Scheduled run triggered");
@@ -72,7 +72,6 @@ public class AssetSnapshotJobService {
                 result.getStatus(), result.getInsertedCount(), result.getFailedCount());
     }
 
-    /** Sinkron. Balik setelah semua CIF selesai diproses. */
     public JobRunResultDTO execute() {
         JobRunResultDTO result = new JobRunResultDTO();
         result.setJobRunId(UUID.randomUUID().toString());
@@ -109,16 +108,16 @@ public class AssetSnapshotJobService {
 
         KursResolution kurs = kursResolver.resolve();
         if (kurs == null) {
-            log.error("[SNAPSHOT] ABORT - kurs tidak tersedia dari Trapi maupun DB");
+            log.error("[SNAPSHOT] ABORT - kurs tidak tersedia dari Trapi, ESB, maupun DB");
             result.setStatus("ABORTED");
-            result.setMessage("Kurs tidak tersedia dari Trapi maupun database. Tidak ada data ditulis.");
+            result.setMessage("Kurs tidak tersedia. Tidak ada data ditulis.");
             return;
         }
         if (kurs.isStale()) {
             log.error("[SNAPSHOT] ABORT - kurs DB berumur {} jam", kurs.getAgeHours());
             result.setStatus("ABORTED");
-            result.setMessage("Kurs terakhir di DB berumur " + kurs.getAgeHours()
-                    + " jam, melebihi batas. Job dibatalkan. Cek autosys kurs.");
+            result.setMessage("Kurs terakhir berumur " + kurs.getAgeHours()
+                    + " jam, melebihi batas. Job dibatalkan.");
             return;
         }
 
@@ -129,9 +128,8 @@ public class AssetSnapshotJobService {
         log.info("[SNAPSHOT] Kurs source={} pairs={} valueDate={} age={}h",
                 kurs.getSource(), rateMap.size(), kursValueDate, kurs.getAgeHours());
 
-        // Outstanding trade seluruh CIF, diambil sekali lalu dikonversi ke IDR
-        Map<String, BigDecimal> tradeByCif = loadTradeOutstanding(snapshotDate, rateMap);
-        log.info("[SNAPSHOT] Trade outstanding tersedia untuk {} CIF", tradeByCif.size());
+        // Satu query per sumber untuk seluruh CIF. Query gagal -> exception -> job FAILED.
+        AllCifResult datamart = datamartAggregator.loadAllCifs(rateMap);
 
         List<String> cifList = corpCifRepository.findAllCifNo();
         result.setTotalCif(cifList.size());
@@ -154,8 +152,7 @@ public class AssetSnapshotJobService {
             processed++;
             try {
                 AssetSnapshotEntity entity = buildSnapshot(
-                        cif, snapshotDate, rateMap, kursValueDate,
-                        result.getJobRunId(), tradeByCif);
+                        cif, snapshotDate, rateMap, kursValueDate, result.getJobRunId(), datamart);
                 writer.upsert(entity);
 
                 switch (entity.getSourceStatus()) {
@@ -205,107 +202,44 @@ public class AssetSnapshotJobService {
                 inserted, success, partial, empty, failed);
     }
 
-    /**
-     * Ambil outstanding trade seluruh CIF untuk tanggal snapshot dari Datamart Agreement,
-     * konversi ke IDR, kelompokkan per CIF.
-     */
-    private Map<String, BigDecimal> loadTradeOutstanding(
-            LocalDate snapshotDate, Map<String, BigDecimal> rateMap) {
-
-        Map<String, BigDecimal> tradeByCif = new HashMap<>();
-
-        try {
-            LocalDateTime startOfDay = snapshotDate.atStartOfDay();
-            LocalDateTime endOfDay = snapshotDate.plusDays(1).atStartOfDay();
-
-            List<TradeOutstandingByCifProjection> rows =
-                    datamartAgreementRepository.getAllOutstandingGroupedByCif(startOfDay, endOfDay);
-
-            if (rows.isEmpty()) {
-                log.warn("[SNAPSHOT] Tidak ada data trade untuk tanggal {}. "
-                        + "Cek apakah job SFTP sudah jalan hari ini.", snapshotDate);
-                return tradeByCif;
-            }
-
-            int converted = 0;
-            int failed = 0;
-
-            for (TradeOutstandingByCifProjection row : rows) {
-                BigDecimal amount = row.getTotalOutstandingBal() != null
-                        ? row.getTotalOutstandingBal() : BigDecimal.ZERO;
-
-                if (amount.signum() == 0) {
-                    continue;
-                }
-
-                BigDecimal idr = graphConverter.toIdr(amount, row.getCurrency(), rateMap);
-
-                if (idr == null) {
-                    failed++;
-                    log.error("[SNAPSHOT] Gagal konversi trade {} {} -> IDR untuk cif={}",
-                            amount, row.getCurrency(), row.getCifNo());
-                    continue;
-                }
-
-                tradeByCif.merge(row.getCifNo(), idr, BigDecimal::add);
-                converted++;
-            }
-
-            log.info("[SNAPSHOT] Trade: {} baris dikonversi, {} gagal, dari {} grup",
-                    converted, failed, rows.size());
-
-        } catch (Exception e) {
-            log.error("[SNAPSHOT] Gagal ambil trade outstanding: {}", e.getMessage(), e);
-        }
-
-        return tradeByCif;
-    }
-
     private AssetSnapshotEntity buildSnapshot(String cif, LocalDate snapshotDate,
                                               Map<String, BigDecimal> rateMap,
                                               String kursValueDate, String jobRunId,
-                                              Map<String, BigDecimal> tradeByCif) {
+                                              AllCifResult datamart) {
 
-        List<DepositAcctSummarySpDTO> btsAccounts = fetchFromBts(cif);
-        List<OverviewSubResDTO> mapped = accountMapper.mapAll(btsAccounts);
+        List<OverviewSubResDTO> mapped = accountMapper.mapAll(fetchFromBts(cif));
 
-        BigDecimal totalCa = BigDecimal.ZERO, totalSa = BigDecimal.ZERO;
-        BigDecimal totalMfca = BigDecimal.ZERO;
-        BigDecimal totalFca = BigDecimal.ZERO, totalFd = BigDecimal.ZERO;
-        BigDecimal totalTd = BigDecimal.ZERO, totalVa = BigDecimal.ZERO;
-        BigDecimal totalOther = BigDecimal.ZERO;
+        BigDecimal totalCa = BigDecimal.ZERO;
+        BigDecimal totalFca = BigDecimal.ZERO;
+        BigDecimal totalSa = BigDecimal.ZERO;
         boolean rateMissing = false;
 
         for (OverviewSubResDTO acc : mapped) {
+            OvSubProductEnum sub = acc.getSubProduct();
+            // FD/TD dari BTS tidak dihitung; FD diambil dari datamart
+            if (sub != OvSubProductEnum.CA && sub != OvSubProductEnum.FCA && sub != OvSubProductEnum.SA) {
+                continue;
+            }
+
             BigDecimal idr = graphConverter.toIdr(acc.getTotalAmount(), acc.getCurrency(), rateMap);
             if (idr == null) {
                 rateMissing = true;
                 continue;
             }
-            OvSubProductEnum sub = acc.getSubProduct();
-            if (sub == null) {
-                totalOther = totalOther.add(idr);
-                continue;
-            }
+
             switch (sub) {
-                case CA:   totalCa   = totalCa.add(idr);   break;
-                case SA:   totalSa   = totalSa.add(idr);   break;
-                case MFCA: totalMfca = totalMfca.add(idr); break;
-                case FCA:  totalFca  = totalFca.add(idr);  break;
-                case FD:   totalFd   = totalFd.add(idr);   break;
-                case TD:   totalTd   = totalTd.add(idr);   break;
-                case VA:   totalVa   = totalVa.add(idr);   break;
-                default:   totalOther = totalOther.add(idr); break;
+                case CA -> totalCa = totalCa.add(idr);
+                case FCA -> totalFca = totalFca.add(idr);
+                case SA -> totalSa = totalSa.add(idr);
+                default -> { }
             }
         }
 
-        // Total Asset: CA + SA + FCA
-        BigDecimal totalAsset = totalCa.add(totalSa).add(totalFca);
+        BigDecimal totalFd = datamart.fdByCif().getOrDefault(cif, BigDecimal.ZERO);
+        LiabilityBreakdown liab = datamart.liabilitiesByCif().getOrDefault(cif, LiabilityBreakdown.zero());
 
-//        BigDecimal totalAsset = totalCa.add(totalMfca).add(totalFca)
-//                .add(totalFd).add(totalTd).add(totalVa).add(totalOther);
-
-        BigDecimal totalLiabilities = tradeByCif.getOrDefault(cif, BigDecimal.ZERO);
+        BigDecimal totalAsset = totalCa.add(totalFca).add(totalSa).add(totalFd);
+        BigDecimal totalLiabilities = liab.total();
 
         AssetSnapshotEntity e = new AssetSnapshotEntity();
         e.setSnapshotDate(snapshotDate);
@@ -314,23 +248,35 @@ public class AssetSnapshotJobService {
         e.setMonthKey(GraphPeriodUtil.monthKey(snapshotDate));
         e.setQuarterKey(GraphPeriodUtil.quarterKey(snapshotDate));
         e.setCurrency(IDR);
+
         e.setTotalAsset(totalAsset);
-        e.setTotalLiabilities(totalLiabilities);
         e.setTotalCa(totalCa);
-        e.setTotalMfca(totalMfca);
         e.setTotalFca(totalFca);
+        e.setTotalSa(totalSa);
         e.setTotalFd(totalFd);
-        e.setTotalTd(totalTd);
-        e.setTotalVa(totalVa);
-        e.setTotalDpOther(totalOther);
+        e.setTotalTd(BigDecimal.ZERO);
+        e.setTotalMfca(BigDecimal.ZERO);
+        e.setTotalVa(BigDecimal.ZERO);
+        e.setTotalDpOther(BigDecimal.ZERO);
+
+        e.setTotalLiabilities(totalLiabilities);
+        e.setTotalTrd(liab.trd());
+        e.setTotalOd(liab.od());
+        e.setTotalTl(liab.tl());
+        e.setTotalRc(liab.rc());
+
         e.setAccountCount(mapped.size());
         e.setKursValueDate(kursValueDate);
         e.setJobRunId(jobRunId);
         e.setCreatedDate(LocalDateTime.now());
 
-        if (mapped.isEmpty())      e.setSourceStatus("EMPTY");
-        else if (rateMissing)      e.setSourceStatus("PARTIAL");
-        else                       e.setSourceStatus("SUCCESS");
+        // CIF yang hanya punya pinjaman tetap SUCCESS, supaya tetap tampil di grafik
+        boolean isEmpty = mapped.isEmpty() && totalFd.signum() == 0 && totalLiabilities.signum() == 0;
+        boolean isPartial = rateMissing || datamart.partialCifs().contains(cif);
+
+        if (isEmpty)        e.setSourceStatus("EMPTY");
+        else if (isPartial) e.setSourceStatus("PARTIAL");
+        else                e.setSourceStatus("SUCCESS");
 
         return e;
     }

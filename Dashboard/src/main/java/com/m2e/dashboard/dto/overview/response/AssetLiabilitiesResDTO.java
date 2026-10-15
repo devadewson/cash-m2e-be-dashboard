@@ -34,6 +34,7 @@ public class AssetLiabilitiesResDTO {
     private BigDecimal totalCA = BigDecimal.ZERO;
     private BigDecimal totalMFCA = BigDecimal.ZERO;
     private BigDecimal totalFCA = BigDecimal.ZERO;
+    private BigDecimal totalSA = BigDecimal.ZERO;
 
     private BigDecimal totalVA = BigDecimal.ZERO;
 
