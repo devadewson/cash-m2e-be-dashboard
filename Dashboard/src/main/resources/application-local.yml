@@ -49,6 +49,10 @@ m2e:
     password: MaybankWinner1!
     remote-directory: /XCOMDATA/M2ETRADE/Convergence
     file-name: EDW_TRADE.TXT
+    fd-file-name: EDW_FD.TXT
+    prk-file-name: EDW_LOAN_PRK.TXT
+    pb-facility-file-name: EDW_LOAN_PBPPB_Fasilitas.TXT
+    pb-draw-file-name: EDW_LOAN_PBPPB_DrawNumber.TXT
     local-temp-directory: C:/temp/sftp-files
     polling-interval: 300000
 
@@ -86,15 +90,27 @@ springdoc:
 
 rate:
   api:
-    url: https://erate-dev.maybank.co.id:8668
+    url: https://erateee-dev.maybank.co.id:8668
     tenor: TODAY
     client-name: M2U_270
+  esb:
+    enabled: true
+    url: https://10.235.66.95:8810/id/mbi/v1/RCMS/GetExchangeRate
+  resolve-cache-seconds: 300
 
 job:
   kurs-history:
     cron: "0 0 15 * * *"
   sftp-datamart:
-    cron: "0 5 8 * * *"
+    cron: "0 5 15 * * *"
+  fd-datamart:
+    cron: "0 10 15 * * *"
+  prk-datamart:
+    cron: "0 15 15 * * *"
+  pb-datamart:
+    cron: "0 20 15 * * *"
   asset-snapshot:
-    cron: "0 20 8 * * *"
+    cron: "0 45 15 * * *"
+
+
 

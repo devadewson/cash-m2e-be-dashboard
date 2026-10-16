@@ -49,12 +49,6 @@ public class ImportLCSKBDNController {
     @PostMapping("acct-list")
     public ResponseEntity<ApiResponse<TradeAcctListingDTO>> getAccountList
             (@RequestHeader(value = HttpHeaders.AUTHORIZATION,required = false) String auth, @RequestBody AccountListReq req) {
-//        String userId = "0010274957";
-//        String corpId = "0010274957";
-//        UserAndCorp userAndCorp = new UserAndCorp();
-//        userAndCorp.setUserId(userId);
-//        userAndCorp.setCorpId(corpId);
-
         UserAndCorp userAndCorp = jwtUtil.extractUserIdAndCorpId(auth);
         return ResponseEntity.ok(tradeService.getTradeAccountListing(userAndCorp, req, TradeEnum.IMPORT_LC_SKBDN));
     }

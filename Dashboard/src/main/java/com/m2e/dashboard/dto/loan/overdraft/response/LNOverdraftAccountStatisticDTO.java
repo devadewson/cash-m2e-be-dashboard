@@ -4,9 +4,7 @@ import com.m2e.dashboard.dto.base.AccountStatisticDTO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
 
-import java.math.BigDecimal;
 
 @EqualsAndHashCode(callSuper = true)
 @Data

@@ -32,23 +32,40 @@ public class SftpDownloader {
     private String remoteDir;
 
     @Value("${m2e.sftp.file-name}")
-    private String fileName;
+    private String defaultFileName;
 
+    /**
+     * Unduh file default (trade) ke path lokal.
+     */
     public void download(String localPath) {
+        download(defaultFileName, localPath);
+    }
+
+    /**
+     * Unduh file tertentu dari remote directory yang sama.
+     *
+     * @param remoteFileName
+     * @param localPath
+     */
+    public void download(String remoteFileName, String localPath) {
         SSHClient ssh = new SSHClient();
+        String remotePath = remoteDir + "/" + remoteFileName;
+
         try {
-            // Koneksi
             ssh.addHostKeyVerifier(new PromiscuousVerifier());
             ssh.connect(host, port);
             ssh.authPassword(username, password);
 
-            // Buat folder lokal dulu
             File localFile = new File(localPath);
-            localFile.getParentFile().mkdirs();
+            File parent = localFile.getParentFile();
+            if (parent != null) {
+                parent.mkdirs();
+            }
 
-            // Download
+            log.info("Downloading {} -> {}", remotePath, localPath);
+
             try (SFTPClient sftp = ssh.newSFTPClient();
-                 RemoteFile rf = sftp.open(remoteDir + "/" + fileName);
+                 RemoteFile rf = sftp.open(remotePath);
                  FileOutputStream fos = new FileOutputStream(localFile)) {
 
                 byte[] buf = new byte[65536];
@@ -63,11 +80,15 @@ public class SftpDownloader {
                 }
             }
 
-            log.info("Downloaded: {} ({} MB)", localPath, localFile.length() / 1048576);
+            if (localFile.length() == 0) {
+                log.warn("File {} terunduh tapi ukurannya 0 byte", remoteFileName);
+            }
+
+            log.info("Downloaded: {} ({} bytes)", localPath, localFile.length());
 
         } catch (Exception e) {
-            log.error("Download failed: {}", e.getMessage());
-            throw new RuntimeException("SFTP download failed", e);
+            log.error("Download failed for {}: {}", remotePath, e.getMessage());
+            throw new RuntimeException("SFTP download failed: " + remotePath, e);
         } finally {
             try {
                 if (ssh.isConnected()) {

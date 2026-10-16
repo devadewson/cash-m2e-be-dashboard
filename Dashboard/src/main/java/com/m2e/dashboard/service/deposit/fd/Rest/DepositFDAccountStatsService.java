@@ -4,200 +4,144 @@ import com.m2e.dashboard.config.CorpCifResolver;
 import com.m2e.dashboard.config.UserAndCorp;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
+import com.m2e.dashboard.dto.deposit.DepositFdStatsByCurrencyProjection;
 import com.m2e.dashboard.dto.deposit.fd.request.DepositFDAcctStatsReqDTO;
 import com.m2e.dashboard.dto.deposit.fd.response.DepositFDAcctStatsDTO;
 import com.m2e.dashboard.dto.overview.Refactor.KursResolution;
-import com.m2e.dashboard.enums.AcctTypEnum;
-import com.m2e.dashboard.model.BTS.Request.Summary;
-import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryCategory;
-import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryProduct;
-import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
-import com.m2e.dashboard.service.deposit.ca.Rest.BTSAccountClient;
+import com.m2e.dashboard.repository.DepositFdRepository;
 import com.m2e.dashboard.service.overview.AssetGraph.GraphCurrencyConverter;
+import com.m2e.dashboard.service.overview.Datamart.DatamartDateRange;
+import com.m2e.dashboard.service.overview.Datamart.DatamartDateResolver;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
 import com.m2e.dashboard.util.DateTimeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 
+/**
+ * Statistik deposito berjangka dari DATAMART_DEPOSIT_FD, tanggal muat terakhir.
+ * Dikonversi ke baseCurrency karena menjumlahkan lintas deposito.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DepositFDAccountStatsService {
 
-    private final BTSAccountClient btsAccountClient;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final DepositFdRepository repository;
     private final CorpCifResolver corpCifResolver;
     private final KursResolver kursResolver;
     private final GraphCurrencyConverter graphConverter;
+    private final DatamartDateResolver dateResolver;
 
     private static final String IDR = "IDR";
-    private static final String REDIS_KEY_PREFIX = "deposit:fd:stats:";
-    private static final long CACHE_TTL_MINUTES = 15;
+    private static final String CODE_SUCCESS = "0";
+    private static final String CODE_FAILED = "99";
 
+    @Cacheable(
+            value = "depositFdStats",
+            key = "#user.corpId + '_' "
+                    + "+ (#req?.baseCurrency != null and !#req.baseCurrency.isBlank() "
+                    + "   ? #req.baseCurrency.trim().toUpperCase() : 'IDR') + '_' "
+                    + "+ T(java.time.LocalDate).now()",
+            unless = "#result == null || #result.msgBody == null"
+    )
     public ApiResponse<DepositFDAcctStatsDTO> getDepositFDAccountStats(
             UserAndCorp user, DepositFDAcctStatsReqDTO req) {
 
-        String cifNo = corpCifResolver.resolveCif(user.getCorpId());
-        String targetCurrency = (req.getBaseCurrency() != null && !req.getBaseCurrency().isBlank())
-                ? req.getBaseCurrency().trim().toUpperCase() : IDR;
+        String requested = (req != null) ? req.getBaseCurrency() : null;
+        String targetCurrency = (requested != null && !requested.isBlank())
+                ? requested.trim().toUpperCase() : IDR;
 
-        String redisKey = REDIS_KEY_PREFIX + user.getUserId() + ":" + cifNo + ":" + targetCurrency;
-
-        // CASE 1: non-realtime, ambil dari cache
-        if (!Boolean.TRUE.equals(req.getRealTimeIndicator())) {
-            DepositFDAcctStatsDTO cached = readFromCache(redisKey);
-            return success(cached != null ? cached : createEmptyStats(targetCurrency));
-        }
-
-        // CASE 2: realtime, ambil dari BTS
+        String cifNo;
         try {
-            SummaryResponse btsResp = btsAccountClient.getAccountSummary(buildBTSRequest(user, cifNo));
-
-            DepositFDAcctStatsDTO stats = mapBtsToDepositFDStats(btsResp, cifNo, targetCurrency);
-            if (stats == null) {
-                return failure("Kurs tidak tersedia untuk konversi ke " + targetCurrency);
-            }
-
-            stats.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
-            stats.setLastUpdatedDate(DateTimeUtil.getTodayDate());
-
-            writeToCache(redisKey, stats);
-            return success(stats);
-
-        } catch (Exception ex) {
-            log.error("BTS call failed for FD account stats, cif={}", cifNo, ex);
-
-            DepositFDAcctStatsDTO cached = readFromCache(redisKey);
-            if (cached != null) {
-                log.warn("Serving stale cached FD stats for cif={}", cifNo);
-                return success(cached);
-            }
-            return failure("Data deposito tidak tersedia saat ini");
-        }
-    }
-
-    private Summary buildBTSRequest(UserAndCorp user, String cifNo) {
-        Summary req = new Summary();
-        req.setUserId(user.getUserId());
-        req.setCif(cifNo);
-        req.setLocale("id_ID");
-        req.setIndicator("R");
-        return req;
-    }
-
-    /**
-     * @return null kalau konversi gagal, supaya caller bisa mengembalikan error
-     *         alih-alih total yang tidak lengkap.
-     */
-    private DepositFDAcctStatsDTO mapBtsToDepositFDStats(
-            SummaryResponse response, String cifNo, String targetCurrency) {
-
-        if (response == null
-                || response.getResponseData() == null
-                || response.getResponseData().getAssetList() == null) {
-            log.warn("BTS response kosong untuk cif={}", cifNo);
-            return createEmptyStats(targetCurrency);
+            cifNo = corpCifResolver.resolveCif(user.getCorpId());
+        } catch (Exception e) {
+            log.error("[FD-Stats] CIF gagal di-resolve corpId={}: {}", user.getCorpId(), e.getMessage());
+            return failure("CIF tidak ditemukan untuk korporasi ini");
         }
 
-        List<SummaryProduct> fdProducts = new ArrayList<>();
-        int totalScanned = 0;
-        boolean needsConversion = false;
-
-        for (SummaryCategory category : response.getResponseData().getAssetList()) {
-            if (category.getProductList() == null) {
-                continue;
-            }
-            for (SummaryProduct product : category.getProductList()) {
-                totalScanned++;
-                if (!isFixedDeposit(product.getAccountType())) {
-                    continue;
-                }
-                fdProducts.add(product);
-
-                String currency = product.getCurrencyCodeIso();
-                if (currency != null && !targetCurrency.equalsIgnoreCase(currency.trim())) {
-                    needsConversion = true;
-                }
-            }
-        }
-
-        if (fdProducts.isEmpty()) {
-            if (totalScanned > 0) {
-                log.warn("cif={}: {} rekening di-scan, tidak ada yang bertipe {}. "
-                                + "Cek nilai accountType dari BTS.",
-                        cifNo, totalScanned, AcctTypEnum.TD.name());
-            }
-            return createEmptyStats(targetCurrency);
-        }
-
-        Map<String, BigDecimal> rateMap = Map.of();
-        if (needsConversion) {
-            KursResolution kurs = kursResolver.resolve();
-            if (kurs == null) {
-                log.error("Kurs tidak tersedia dari Trapi maupun DB, cif={} target={}",
-                        cifNo, targetCurrency);
-                return null;
-            }
-            rateMap = kurs.getRateMap();
-            log.info("FD stats kurs source={} pairs={} age={}h",
-                    kurs.getSource(), rateMap.size(), kurs.getAgeHours());
-        }
-
-        BigDecimal totalPrincipal = BigDecimal.ZERO;
-
-        for (SummaryProduct product : fdProducts) {
-            BigDecimal amount = parseAmount(product.getAmount(), product.getAccNo());
-            String currency = product.getCurrencyCodeIso();
-
-            BigDecimal converted = graphConverter.convert(amount, currency, targetCurrency, rateMap);
-
-            if (converted == null) {
-                log.error("Gagal konversi {} {} -> {} untuk deposito {}. Total dibatalkan.",
-                        amount, currency, targetCurrency, product.getAccNo());
-                return null;
-            }
-
-            totalPrincipal = totalPrincipal.add(converted);
-        }
-
-        log.info("FD stats cif={} accounts={} total={} {}",
-                cifNo, fdProducts.size(), totalPrincipal.toPlainString(), targetCurrency);
-
-        DepositFDAcctStatsDTO statsDTO = new DepositFDAcctStatsDTO();
-        statsDTO.setNumberOfAcct(String.valueOf(fdProducts.size()));
-        statsDTO.setTotalOfCertificates(String.valueOf(fdProducts.size()));
-        statsDTO.setConsolidatedPrincipalAmt(format(totalPrincipal));
-        statsDTO.setCurrency(targetCurrency);
-        return statsDTO;
-    }
-
-    private boolean isFixedDeposit(String acctType) {
-        return acctType != null
-                && AcctTypEnum.TD.name().equalsIgnoreCase(acctType.trim());
-    }
-
-    private BigDecimal parseAmount(String value, String acctNo) {
-        if (value == null || value.trim().isEmpty()) {
-            return BigDecimal.ZERO;
-        }
         try {
-            return new BigDecimal(value.replace(",", "").trim());
-        } catch (NumberFormatException e) {
-            log.warn("Gagal parse amount [{}] untuk rekening {}", value, acctNo);
-            return BigDecimal.ZERO;
+            Optional<DatamartDateRange> range = dateResolver.fd();
+            if (range.isEmpty()) {
+                log.warn("[FD-Stats] Belum ada data FD di database");
+                return success(buildDto(0L, BigDecimal.ZERO, targetCurrency));
+            }
+            DatamartDateRange r = range.get();
+
+            log.info("[FD-Stats] START cif={} currency={} dataDate={}", cifNo, targetCurrency, r.dataDate());
+
+            List<DepositFdStatsByCurrencyProjection> groups =
+                    repository.getStatsByCurrency(cifNo, r.startOfDay(), r.endOfDay());
+
+            if (groups.isEmpty()) {
+                log.info("[FD-Stats] Tidak ada deposito untuk cif={} dataDate={}", cifNo, r.dataDate());
+                return success(buildDto(0L, BigDecimal.ZERO, targetCurrency));
+            }
+
+            boolean needsConversion = groups.stream()
+                    .anyMatch(g -> g.getCurrency() == null
+                            || !targetCurrency.equalsIgnoreCase(g.getCurrency().trim()));
+
+            Map<String, BigDecimal> rateMap = Map.of();
+            if (needsConversion) {
+                KursResolution kurs = kursResolver.resolve();
+                if (kurs == null) {
+                    log.error("[FD-Stats] Kurs tidak tersedia, cif={}", cifNo);
+                    return failure("Kurs tidak tersedia untuk konversi ke " + targetCurrency);
+                }
+                rateMap = kurs.getRateMap();
+                log.info("[FD-Stats] Kurs source={} pairs={} age={}h",
+                        kurs.getSource(), rateMap.size(), kurs.getAgeHours());
+            }
+
+            long totalAccounts = 0L;
+            BigDecimal totalPrincipal = BigDecimal.ZERO;
+
+            for (DepositFdStatsByCurrencyProjection g : groups) {
+                totalAccounts += (g.getNoOfAccounts() != null ? g.getNoOfAccounts() : 0L);
+
+                BigDecimal amount = g.getTotalPrincipal() != null ? g.getTotalPrincipal() : BigDecimal.ZERO;
+                BigDecimal converted = graphConverter.convert(amount, g.getCurrency(), targetCurrency, rateMap);
+
+                if (converted == null) {
+                    log.error("[FD-Stats] Gagal konversi {} {} -> {} untuk cif={}. Total dibatalkan.",
+                            amount, g.getCurrency(), targetCurrency, cifNo);
+                    return failure("Kurs " + g.getCurrency() + " ke " + targetCurrency + " tidak ditemukan");
+                }
+
+                totalPrincipal = totalPrincipal.add(converted);
+            }
+
+            log.info("[FD-Stats] SUCCESS cif={} accounts={} total={} {}",
+                    cifNo, totalAccounts, totalPrincipal.toPlainString(), targetCurrency);
+
+            return success(buildDto(totalAccounts, totalPrincipal, targetCurrency));
+
+        } catch (Exception e) {
+            log.error("[FD-Stats] FAILED cif={}: {}", cifNo, e.getMessage(), e);
+            return failure("Data deposito tidak dapat diproses saat ini");
         }
+    }
+
+    private DepositFDAcctStatsDTO buildDto(long count, BigDecimal total, String currency) {
+        DepositFDAcctStatsDTO dto = new DepositFDAcctStatsDTO();
+        dto.setNumberOfAcct(String.valueOf(count));
+        dto.setTotalOfCertificates(String.valueOf(count));
+        dto.setConsolidatedPrincipalAmt(format(total));
+        dto.setCurrency(currency);
+        dto.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
+        dto.setLastUpdatedDate(DateTimeUtil.getTodayDate());
+        return dto;
     }
 
     /** DecimalFormat tidak thread-safe, jadi dibuat baru tiap pemanggilan. */
@@ -207,50 +151,19 @@ public class DepositFDAccountStatsService {
         return formatter.format(value.setScale(2, RoundingMode.HALF_UP));
     }
 
-    private DepositFDAcctStatsDTO readFromCache(String redisKey) {
-        try {
-            Object cached = redisTemplate.opsForValue().get(redisKey);
-            if (cached instanceof DepositFDAcctStatsDTO dto) {
-                return dto;
-            }
-            if (cached != null) {
-                log.warn("Cache type mismatch untuk key {}: {}", redisKey, cached.getClass().getName());
-                redisTemplate.delete(redisKey);
-            }
-        } catch (Exception e) {
-            log.warn("Gagal baca cache {}: {}", redisKey, e.getMessage());
-        }
-        return null;
-    }
-
-    private void writeToCache(String redisKey, DepositFDAcctStatsDTO stats) {
-        try {
-            redisTemplate.opsForValue().set(redisKey, stats, CACHE_TTL_MINUTES, TimeUnit.MINUTES);
-        } catch (Exception e) {
-            log.warn("Gagal simpan cache {}: {}", redisKey, e.getMessage());
-        }
-    }
-
     private ApiResponse<DepositFDAcctStatsDTO> success(DepositFDAcctStatsDTO body) {
         ApiResponse<DepositFDAcctStatsDTO> res = new ApiResponse<>();
-        res.setMsgHeader(new ErrorResponse("0"));
+        res.setMsgHeader(new ErrorResponse(CODE_SUCCESS));
         res.setMsgBody(body);
         return res;
     }
 
     private ApiResponse<DepositFDAcctStatsDTO> failure(String message) {
-        log.warn("Returning error response: {}", message);
+        ErrorResponse header = new ErrorResponse(CODE_FAILED);
+        header.setErrorMessage(message);
         ApiResponse<DepositFDAcctStatsDTO> res = new ApiResponse<>();
-        res.setMsgHeader(new ErrorResponse("99"));
+        res.setMsgHeader(header);
+        res.setMsgBody(null);
         return res;
-    }
-
-    private DepositFDAcctStatsDTO createEmptyStats(String currency) {
-        DepositFDAcctStatsDTO emptyStats = new DepositFDAcctStatsDTO();
-        emptyStats.setNumberOfAcct("0");
-        emptyStats.setTotalOfCertificates("0");
-        emptyStats.setConsolidatedPrincipalAmt("0.00");
-        emptyStats.setCurrency(currency);
-        return emptyStats;
     }
 }

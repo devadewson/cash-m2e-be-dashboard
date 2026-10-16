@@ -51,7 +51,10 @@ public class AssetSnapshotEntity {
     @Column(name = "TOTAL_TD",       precision = 30, scale = 6) private BigDecimal totalTd;
     @Column(name = "TOTAL_VA",       precision = 30, scale = 6) private BigDecimal totalVa;
     @Column(name = "TOTAL_DP_OTHER", precision = 30, scale = 6) private BigDecimal totalDpOther;
-
+    @Column(name = "TOTAL_TRD", precision = 30, scale = 6) private BigDecimal totalTrd;
+    @Column(name = "TOTAL_OD", precision = 30, scale = 6)  private BigDecimal totalOd;
+    @Column(name = "TOTAL_TL", precision = 30, scale = 6)  private BigDecimal totalTl;
+    @Column(name = "TOTAL_RC", precision = 30, scale = 6)  private BigDecimal totalRc;
     @Column(name = "ACCOUNT_COUNT")
     private Integer accountCount;
 
@@ -66,4 +69,5 @@ public class AssetSnapshotEntity {
 
     @Column(name = "CREATED_DATE")
     private LocalDateTime createdDate;
+
 }

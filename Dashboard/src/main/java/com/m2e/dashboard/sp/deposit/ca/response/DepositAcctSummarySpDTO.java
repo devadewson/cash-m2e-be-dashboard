@@ -19,4 +19,11 @@ public class DepositAcctSummarySpDTO implements Serializable {
     private MoreActionsEntitlement moreActions;
     private String acctStatusCode;
     private String acctStatusDesc;
+
+    // Khusus Fixed Deposit, null untuk CA dan SA
+    private String principal;
+    private String tenor;
+    private String interestRate;
+    private String placementDate;
+    private String maturityDate;
 }
