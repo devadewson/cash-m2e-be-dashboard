@@ -26,8 +26,8 @@ pipeline {
         repo        = "repouat.maybank.co.id:8082/m2e"
         image_name  = "cash-m2e-be-dashboard"
         image_env   = "uat"
-        SSH_TARGET1 = "sa-rootless@${params.TARGET_SERVER_1}"
-        SSH_TARGET2 = "sa-rootless@${params.TARGET_SERVER_2}"
+        SSH_TARGET1 = "m2esofttoken@${params.TARGET_SERVER_1}"
+        SSH_TARGET2 = "m2esofttoken@${params.TARGET_SERVER_2}"
         APP_PATH    = "/data/sa-rootless/source/cash-m2e-be-dashboard"
         APP_PORT    = "9015"
 
