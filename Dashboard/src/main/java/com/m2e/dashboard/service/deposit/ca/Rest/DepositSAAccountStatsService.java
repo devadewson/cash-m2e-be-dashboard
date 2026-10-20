@@ -24,6 +24,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -44,6 +46,9 @@ public class DepositSAAccountStatsService {
     private static final String IDR = "IDR";
     private static final String REDIS_KEY_PREFIX = "deposit:sa:stats:";
     private static final long CACHE_TTL_MINUTES = 15;
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
 
     public ApiResponse<DepositAcctStatsDTO> getDepositSAAccountStats(
             UserAndCorp user, DepositAcctStatsReqDTO req) {
@@ -69,8 +74,9 @@ public class DepositSAAccountStatsService {
                 return failure("Kurs tidak tersedia untuk konversi ke " + targetCurrency);
             }
 
-            stats.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
-            stats.setLastUpdatedDate(DateTimeUtil.getTodayDate());
+            LocalDateTime updatedAt = LocalDateTime.now();
+            stats.setLastUpdatedDateTime(updatedAt.format(DATETIME_FMT));
+            stats.setLastUpdatedDate(updatedAt.format(DATE_FMT));
 
             writeToCache(redisKey, stats);
             return success(stats);

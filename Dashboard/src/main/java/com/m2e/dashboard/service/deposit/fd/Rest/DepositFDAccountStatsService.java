@@ -13,7 +13,6 @@ import com.m2e.dashboard.service.overview.AssetGraph.GraphCurrencyConverter;
 import com.m2e.dashboard.service.overview.Datamart.DatamartDateRange;
 import com.m2e.dashboard.service.overview.Datamart.DatamartDateResolver;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
-import com.m2e.dashboard.util.DateTimeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -23,10 +22,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+
+
 
 /**
  * Statistik deposito berjangka dari DATAMART_DEPOSIT_FD, tanggal muat terakhir.
@@ -46,6 +49,9 @@ public class DepositFDAccountStatsService {
     private static final String IDR = "IDR";
     private static final String CODE_SUCCESS = "0";
     private static final String CODE_FAILED = "99";
+
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Cacheable(
             value = "depositFdStats",
@@ -134,13 +140,16 @@ public class DepositFDAccountStatsService {
     }
 
     private DepositFDAcctStatsDTO buildDto(long count, BigDecimal total, String currency) {
+
         DepositFDAcctStatsDTO dto = new DepositFDAcctStatsDTO();
+        LocalDateTime updatedAt = LocalDateTime.now();
+
         dto.setNumberOfAcct(String.valueOf(count));
         dto.setTotalOfCertificates(String.valueOf(count));
         dto.setConsolidatedPrincipalAmt(format(total));
         dto.setCurrency(currency);
-        dto.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
-        dto.setLastUpdatedDate(DateTimeUtil.getTodayDate());
+        dto.setLastUpdatedDateTime(updatedAt.format(DATETIME_FMT));
+        dto.setLastUpdatedDate(updatedAt.format(DATE_FMT));
         return dto;
     }
 

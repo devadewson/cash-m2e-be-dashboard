@@ -1,4 +1,4 @@
-package com.m2e.dashboard.dto.loan.overdraft;
+package com.m2e.dashboard.projection;
 
 
 import java.math.BigDecimal;

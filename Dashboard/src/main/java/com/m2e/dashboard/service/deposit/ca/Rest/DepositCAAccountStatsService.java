@@ -14,7 +14,6 @@ import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryProduct;
 import com.m2e.dashboard.model.BTS.Response.Sumary.SummaryResponse;
 import com.m2e.dashboard.service.overview.AssetGraph.GraphCurrencyConverter;
 import com.m2e.dashboard.service.overview.JobKursService.KursResolver;
-import com.m2e.dashboard.util.DateTimeUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -24,6 +23,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -43,6 +44,11 @@ public class DepositCAAccountStatsService {
     private static final String IDR = "IDR";
     private static final String REDIS_KEY_PREFIX = "deposit:ca:stats:";
     private static final long CACHE_TTL_MINUTES = 15;
+
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+
 
     public ApiResponse<DepositAcctStatsDTO> getDepositCAAccountStats(
             UserAndCorp user, DepositAcctStatsReqDTO req) {
@@ -67,9 +73,10 @@ public class DepositCAAccountStatsService {
             if (stats == null) {
                 return failure("Kurs tidak tersedia untuk konversi ke " + targetCurrency);
             }
+            LocalDateTime updatedAt = LocalDateTime.now();
 
-            stats.setLastUpdatedDateTime(DateTimeUtil.getCurrentTime());
-            stats.setLastUpdatedDate(DateTimeUtil.getTodayDate());
+            stats.setLastUpdatedDateTime(updatedAt.format(DATETIME_FMT));
+            stats.setLastUpdatedDate(updatedAt.format(DATE_FMT));
 
             writeToCache(redisKey, stats);
             return success(stats);

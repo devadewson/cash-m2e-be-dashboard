@@ -68,8 +68,6 @@ public class DepositFdFileProcessor {
         int inserted = 0;
         int skipped = 0;
 
-        // ISO_8859_1 menerima semua byte 0-255 sehingga tidak pernah gagal karena
-        // encoding, dan hasilnya konsisten di Windows maupun Linux.
         try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.ISO_8859_1)) {
             reader.readLine(); // baris 1 selalu header dari EDW
 

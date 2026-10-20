@@ -26,10 +26,6 @@ import java.util.function.Supplier;
 
 /**
  * Memuat file fasilitas dan draw ke database dalam SATU transaksi.
- * Gagal di mana pun, kedua tabel di-rollback sehingga tidak pernah setengah jadi.
- *
- * Harus bean terpisah dari pemanggilnya: @Transactional tidak berlaku
- * untuk pemanggilan dari method lain di kelas yang sama.
  */
 @Slf4j
 @Service
@@ -139,7 +135,6 @@ public class LoanPbDataLoader {
         return inserted;
     }
 
-    /** Simpan satu batch lalu kosongkan persistence context agar memori tidak menumpuk. */
     private <T> int flushBatch(JpaRepository<T, Long> repository, List<T> batch) {
         int size = batch.size();
         repository.saveAll(batch);

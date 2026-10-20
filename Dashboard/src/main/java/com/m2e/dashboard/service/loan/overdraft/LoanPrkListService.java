@@ -6,7 +6,7 @@ import com.m2e.dashboard.dto.base.loan.LNAcctListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.common.SearchCollectionResponse;
-import com.m2e.dashboard.dto.loan.overdraft.LoanPrkListingProjection;
+import com.m2e.dashboard.projection.LoanPrkListingProjection;
 import com.m2e.dashboard.dto.loan.overdraft.response.LNOverdraftAcctListingDTO;
 import com.m2e.dashboard.dto.loan.overdraft.response.LNOverdraftDTO;
 import com.m2e.dashboard.repository.LoanPrkRepository;

@@ -18,9 +18,7 @@ import java.util.List;
 public interface LoanPbFacilityRepository extends JpaRepository<LoanPbFacilityEntity, Long> {
 
     /**
-     * Fasilitas milik CIF pada tanggal data yang punya minimal satu draw produk ini.
-     * Dipakai bersama oleh listing dan stats agar keduanya selalu menghitung set yang sama.
-     */
+     * Fasilitas milik CIF pada tanggal data yang punya minimal satu draw produk ini.*/
     String FACILITY_OF_PRODUCT = """
             FROM LoanPbFacilityEntity f
             WHERE f.cifNo = :cifNo

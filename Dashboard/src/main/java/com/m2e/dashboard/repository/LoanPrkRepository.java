@@ -1,6 +1,6 @@
 package com.m2e.dashboard.repository;
 
-import com.m2e.dashboard.dto.loan.overdraft.LoanPrkListingProjection;
+import com.m2e.dashboard.projection.LoanPrkListingProjection;
 import com.m2e.dashboard.dto.loan.overdraft.LoanPrkStatsByCurrencyProjection;
 import com.m2e.dashboard.dto.overview.CifAmountByCurrencyProjection;
 import com.m2e.dashboard.model.DataMart.LoanPrkEntity;

@@ -196,7 +196,7 @@ public class DepositOverviewService {
 
     /**
      * Hanya CA, FCA, dan SA dari BTS. FD/TD dari BTS dikeluarkan karena FD
-     * diambil dari datamart; kalau ikut, deposito terhitung dua kali.
+     * diambil dari datamart;
      */
     private BtsAssets sumBtsAssets(List<OverviewSubResDTO> accounts, String target,
                                    Map<String, BigDecimal> rateMap) {

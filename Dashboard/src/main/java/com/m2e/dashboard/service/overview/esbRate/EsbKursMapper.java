@@ -11,12 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Mengubah ESB counter rate jadi rate map "XXX.IDR" -> TTBuyRate.
- *
- * Dibuang: mata uang lama dan tidak di-quote ("-------"), rate nol, serta kode
- * yang bukan ISO 3 huruf seperti "TC" dan "001"-"004" yang artinya belum terkonfirmasi.
- */
+
 @Slf4j
 @Component
 public class EsbKursMapper {
@@ -49,7 +44,6 @@ public class EsbKursMapper {
         return rateMap;
     }
 
-    /** "2026-10-13 10:25:47.173958" -> "20261013". Hari ini kalau tidak terbaca. */
     public String toValueDate(String timeStamp) {
         try {
             if (timeStamp != null && timeStamp.length() >= 10) {
@@ -65,7 +59,6 @@ public class EsbKursMapper {
         return ccy.length() == 3 && ccy.chars().allMatch(ch -> ch >= 'A' && ch <= 'Z');
     }
 
-    /** "17,270.00" -> 17270.00. Null untuk kosong atau placeholder "-------". */
     private BigDecimal parseRate(String value) {
         if (value == null || value.isBlank()) {
             return null;

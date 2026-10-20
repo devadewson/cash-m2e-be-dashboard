@@ -13,8 +13,6 @@ import java.io.Serializable;
 public class ErrorResponse implements Serializable {
 
     private String responseCode = "0";
-
-    /** Hanya terisi saat gagal; tidak muncul di JSON kalau null. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String errorMessage;
 
