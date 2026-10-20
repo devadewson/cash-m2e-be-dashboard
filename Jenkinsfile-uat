@@ -10,8 +10,8 @@ pipeline {
         choice(name: 'VAR_IMAGE_BUILD_FLAG', choices: ['true', 'false'], description: 'Flag for Container Image Build')
         choice(name: 'VAR_IMAGE_PUSH_FLAG', choices: ['true', 'false'], description: 'Flag for Container Image Push')
         choice(name: 'VAR_DEPLOY_FLAG', choices: ['true', 'false'], description: 'Flag for Deployment')
-        string(name: 'TARGET_SERVER_1', defaultValue: '10.235.83.153', description: 'Input IP target server 1')
-        string(name: 'TARGET_SERVER_2', defaultValue: '10.235.83.154', description: 'Input IP target server 2 (optional)')
+        string(name: 'TARGET_SERVER_1', defaultValue: '10.235.83.151', description: 'Input IP target server 1')
+        string(name: 'TARGET_SERVER_2', defaultValue: '10.235.83.152', description: 'Input IP target server 2 (optional)')
         choice(name: 'DEPLOY_BOTH_SERVER', choices: ['true', 'false'], description: 'Deploy to both server?')
         string(name: 'image_version', defaultValue: '1.0.0', description: 'Set your image tag')
         string(name: 'MODEL_VERSION', defaultValue: '1.3.1-SNAPSHOT', description: 'Model dependency version')
@@ -26,8 +26,8 @@ pipeline {
         repo        = "repouat.maybank.co.id:8082/m2e"
         image_name  = "cash-m2e-be-dashboard"
         image_env   = "uat"
-        SSH_TARGET1 = "sa-rootless@${params.TARGET_SERVER_1}"
-        SSH_TARGET2 = "sa-rootless@${params.TARGET_SERVER_2}"
+        SSH_TARGET1 = "m2esofttoken@${params.TARGET_SERVER_1}"
+        SSH_TARGET2 = "m2esofttoken@${params.TARGET_SERVER_2}"
         APP_PATH    = "/data/sa-rootless/source/cash-m2e-be-dashboard"
         APP_PORT    = "9015"
 
@@ -208,7 +208,7 @@ pipeline {
                             -p ${APP_PORT}:${APP_PORT} \
                             --network slirp4netns \
                             -e SPRING_PROFILES_ACTIVE=${image_env} \
-                            -e EUREKA_IP=10.235.83.153 \
+                            -e EUREKA_IP=10.235.83.151 \
                             -v /etc/hosts:/etc/hosts:ro \
                             -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
                             -v ${APP_PATH}:/logs \
@@ -269,7 +269,7 @@ pipeline {
                             -p ${APP_PORT}:${APP_PORT} \
                             --network slirp4netns \
                             -e SPRING_PROFILES_ACTIVE=${image_env} \
-                            -e EUREKA_IP=10.235.83.153 \
+                            -e EUREKA_IP=10.235.83.151 \
                             -v /etc/hosts:/etc/hosts:ro \
                             -v /data/sa-rootless/source/cash-m2e-config/${image_env}:/app/cfo-${image_env}:ro \
                             -v ${APP_PATH}:/logs \
