@@ -143,7 +143,7 @@ public class DepositSAAccountListService {
                         acc.setAcctName(product.getProductName());
                         acc.setAcctNumber(product.getAccNo());
                         acc.setCurrency(product.getCurrencyCodeIso());
-                        acc.setLedgerBalance(product.getAmount());
+                        acc.setLedgerBalance(product.getAmountDisp());
                         acc.setAvailableBalance(product.getAmount());
                         acc.setAcctType(product.getAccountType());
                         accountList.add(acc);
