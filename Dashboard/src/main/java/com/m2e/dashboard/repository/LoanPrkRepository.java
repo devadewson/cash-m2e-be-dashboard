@@ -24,7 +24,7 @@ public interface LoanPrkRepository extends JpaRepository<LoanPrkEntity, Long> {
      * plafond terpakai; saldo positif berarti dana mengendap dan tidak dihitung.
      */
     @Query("""
-        SELECT com.m2e.dashboard.dto.loan.overdraft.LoanPrkStatsByCurrencyProjection(
+        SELECT new com.m2e.dashboard.dto.loan.overdraft.LoanPrkStatsByCurrencyProjection(
             d.currency,
             COUNT(d.id),
             COALESCE(SUM(d.limitAmount), 0),
