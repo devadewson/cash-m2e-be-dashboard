@@ -6,5 +6,7 @@ import lombok.Data;
 @Data
 public class LNOverdraftAcctListingDTO {
     private String corpCifNo;
+    private String plafond;
+    private String limitAwal;
     private SearchCollectionResponse<LNOverdraftDTO> datas;
 }

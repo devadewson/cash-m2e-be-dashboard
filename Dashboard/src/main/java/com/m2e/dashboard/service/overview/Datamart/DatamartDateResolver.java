@@ -1,10 +1,7 @@
 package com.m2e.dashboard.service.overview.Datamart;
 
 
-import com.m2e.dashboard.repository.DatamartAgreementRepository;
-import com.m2e.dashboard.repository.DepositFdRepository;
-import com.m2e.dashboard.repository.LoanPbFacilityRepository;
-import com.m2e.dashboard.repository.LoanPrkRepository;
+import com.m2e.dashboard.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +20,8 @@ public class DatamartDateResolver {
     private final LoanPrkRepository prkRepository;
     private final LoanPbFacilityRepository pbFacilityRepository;
 
+    private final LoanPlafondRepository plafondRepository;
+
     public Optional<DatamartDateRange> trade() {
         return DatamartDateRange.fromLatest(tradeRepository.findLatestProcessDate());
     }
@@ -35,8 +34,10 @@ public class DatamartDateResolver {
         return DatamartDateRange.fromLatest(prkRepository.findLatestProcessDate());
     }
 
-    /** Fasilitas dan draw PB/PPB dimuat dalam satu transaksi, jadi cukup tabel fasilitas. */
     public Optional<DatamartDateRange> pb() {
         return DatamartDateRange.fromLatest(pbFacilityRepository.findLatestProcessDate());
+    }
+    public Optional<DatamartDateRange> plafond() {
+        return DatamartDateRange.fromLatest(plafondRepository.findLatestProcessDate());
     }
 }

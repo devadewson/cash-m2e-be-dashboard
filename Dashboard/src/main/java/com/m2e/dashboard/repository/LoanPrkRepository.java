@@ -1,5 +1,6 @@
 package com.m2e.dashboard.repository;
 
+import com.m2e.dashboard.projection.LoanPrkAwalTotalsProjection;
 import com.m2e.dashboard.projection.LoanPrkListingProjection;
 import com.m2e.dashboard.dto.loan.overdraft.LoanPrkStatsByCurrencyProjection;
 import com.m2e.dashboard.dto.overview.CifAmountByCurrencyProjection;
@@ -78,4 +79,16 @@ public interface LoanPrkRepository extends JpaRepository<LoanPrkEntity, Long> {
     @Query("DELETE FROM LoanPrkEntity d WHERE d.processDate >= :startOfDay AND d.processDate < :endOfDay")
     int deleteByProcessDateRange(@Param("startOfDay") LocalDateTime startOfDay,
                                  @Param("endOfDay") LocalDateTime endOfDay);
+
+    @Query("""
+    SELECT COALESCE(SUM(d.limitAwal), 0)          AS totalLimitAwal,
+           COALESCE(SUM(d.availableLimitAwal), 0) AS totalAvailableLimitAwal
+    FROM   LoanPrkEntity d
+    WHERE  d.cifNo = :cifNo
+      AND  d.processDate >= :startOfDay
+      AND  d.processDate <  :endOfDay
+    """)
+    LoanPrkAwalTotalsProjection sumAwalTotals(@Param("cifNo") String cifNo,
+                                              @Param("startOfDay") LocalDateTime startOfDay,
+                                              @Param("endOfDay") LocalDateTime endOfDay);
 }

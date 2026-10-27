@@ -27,6 +27,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,8 +56,11 @@ public class LoanPbListService {
     private static final String CODE_SUCCESS = "0";
     private static final String CODE_FAILED = "1";
     private static final int DEFAULT_PAGE_SIZE = 10;
-    /** Membatasi jumlah NOTE_NO di klausa IN query draw. */
     private static final int MAX_PAGE_SIZE = 100;
+
+    private static final DateTimeFormatter EDW_DATE_FMT = DateTimeFormatter.BASIC_ISO_DATE; // yyyyMMdd
+    private static final DateTimeFormatter DATE_FMT     = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
 
     @Cacheable(
             value = LoanPbCacheNames.LISTING,
@@ -144,7 +150,7 @@ public class LoanPbListService {
         dto.setCurrency(f.getCurrency());
         dto.setOriginalLimit(plain(f.getPlafond()));
         dto.setAvailableLimit(plain(f.getAvailableLimit()));
-        dto.setAvailablePeriod(f.getAvailablePeriod());
+        dto.setAvailablePeriod(toDisplayDate(f.getAvailablePeriod()));
 
         // Draw tidak dipaginasi di server: satu halaman berisi seluruh draw fasilitas
         SearchCollectionResponse<LoanPbDrawDTO> drawCollection =
@@ -190,5 +196,18 @@ public class LoanPbListService {
         res.setMsgHeader(header);
         res.setMsgBody(null);
         return res;
+    }
+
+    //Format tanggal available periode
+    private static String toDisplayDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        String value = raw.trim();
+        try {
+            return LocalDate.parse(value, EDW_DATE_FMT).format(DATE_FMT);
+        } catch (DateTimeParseException e) {
+            return value;
+        }
     }
 }

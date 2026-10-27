@@ -6,9 +6,10 @@ import com.m2e.dashboard.dto.base.loan.LNAcctListReq;
 import com.m2e.dashboard.dto.common.ApiResponse;
 import com.m2e.dashboard.dto.common.ErrorResponse;
 import com.m2e.dashboard.dto.common.SearchCollectionResponse;
-import com.m2e.dashboard.projection.LoanPrkListingProjection;
 import com.m2e.dashboard.dto.loan.overdraft.response.LNOverdraftAcctListingDTO;
 import com.m2e.dashboard.dto.loan.overdraft.response.LNOverdraftDTO;
+import com.m2e.dashboard.projection.LoanPrkAwalTotalsProjection;
+import com.m2e.dashboard.projection.LoanPrkListingProjection;
 import com.m2e.dashboard.repository.LoanPrkRepository;
 import com.m2e.dashboard.service.overview.Datamart.DatamartDateRange;
 import com.m2e.dashboard.service.overview.Datamart.DatamartDateResolver;
@@ -20,14 +21,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
-/**
- * Listing PRK dari DATAMART_LOAN_PRK, tanggal muat terakhir.
- * Tanpa konversi currency: tiap rekening dengan mata uang aslinya dari host.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -40,6 +38,7 @@ public class LoanPrkListService {
     private static final String CODE_SUCCESS = "0";
     private static final String CODE_FAILED = "1";
     private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final String ZERO_AMOUNT = "0.00";
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     @Cacheable(
@@ -63,6 +62,9 @@ public class LoanPrkListService {
             Pageable pageable = toPageable(req.getPage(), req.getPageSize());
 
             Page<LNOverdraftDTO> mappedPage;
+            String plafond = ZERO_AMOUNT;
+            String limitAwal = ZERO_AMOUNT;
+
             Optional<DatamartDateRange> range = dateResolver.prk();
 
             if (range.isEmpty()) {
@@ -76,18 +78,27 @@ public class LoanPrkListService {
 
                 Page<LoanPrkListingProjection> resultPage =
                         repository.getListing(cifNo, r.startOfDay(), r.endOfDay(), pageable);
-
                 mappedPage = resultPage.map(this::toDto);
+
+                // Total dihitung dari seluruh rekening CIF pada tanggal muat yang sama dengan listing
+                LoanPrkAwalTotalsProjection totals =
+                        repository.sumAwalTotals(cifNo, r.startOfDay(), r.endOfDay());
+                if (totals != null) {
+                    plafond = toAmount(totals.getTotalAvailableLimitAwal());
+                    limitAwal = toAmount(totals.getTotalLimitAwal());
+                }
             }
 
             SearchCollectionResponse<LNOverdraftDTO> result = new SearchCollectionResponse<>(mappedPage);
 
             LNOverdraftAcctListingDTO dto = new LNOverdraftAcctListingDTO();
             dto.setCorpCifNo(cifNo);
+            dto.setPlafond(plafond);
+            dto.setLimitAwal(limitAwal);
             dto.setDatas(result);
 
-            log.info("[PRK-List] SUCCESS cif={} page={} totalRecords={}",
-                    cifNo, pageable.getPageNumber(), result.getTotalRecordCount());
+            log.info("[PRK-List] SUCCESS cif={} page={} totalRecords={} plafond={} limitAwal={}",
+                    cifNo, pageable.getPageNumber(), result.getTotalRecordCount(), plafond, limitAwal);
 
             return success(dto);
 
@@ -107,18 +118,17 @@ public class LoanPrkListService {
         LNOverdraftDTO dto = new LNOverdraftDTO();
         dto.setAccount(p.getAccountNo());
         dto.setCurrency(p.getCurrency());
-        dto.setLimit(p.getLimitAmount() != null
-                ? p.getLimitAmount().setScale(2, RoundingMode.HALF_UP).toPlainString()
-                : "0.00");
-        // CURRBAL apa adanya dari host; negatif berarti plafond terpakai
-        dto.setOutstanding(p.getOutstanding() != null
-                ? p.getOutstanding().setScale(2, RoundingMode.HALF_UP).toPlainString()
-                : "0.00");
+        dto.setLimit(toAmount(p.getLimitAmount()));
+        dto.setOutstanding(toAmount(p.getOutstanding()));
         dto.setMaturity(p.getMaturityDate() != null ? p.getMaturityDate().format(DATE_FMT) : null);
-        dto.setInterestDue(p.getInterestDue() != null
-                ? p.getInterestDue().setScale(2, RoundingMode.HALF_UP).toPlainString()
-                : "0.00");
+        dto.setInterestDue(toAmount(p.getInterestDue()));
         return dto;
+    }
+
+    private static String toAmount(BigDecimal value) {
+        return value == null
+                ? ZERO_AMOUNT
+                : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private ApiResponse<LNOverdraftAcctListingDTO> success(LNOverdraftAcctListingDTO body) {
