@@ -118,8 +118,7 @@ public class DepositFDAccountListService {
         dto.setLedgerBalance(principal);
         dto.setAvailableBalance(principal);
 
-        dto.setTenor(p.getTenor() != null ? String.valueOf(p.getTenor()) : null);
-        // Desimal apa adanya dari host, misal "0.020000"
+        dto.setTenor(p.getTenor());
         dto.setInterestRate(p.getInterestRate() != null ? p.getInterestRate().toPlainString() : null);
         dto.setPlacementDate(p.getPlacementDate() != null ? p.getPlacementDate().format(DATE_FMT) : null);
         dto.setMaturityDate(p.getMaturityDate() != null ? p.getMaturityDate().format(DATE_FMT) : null);
