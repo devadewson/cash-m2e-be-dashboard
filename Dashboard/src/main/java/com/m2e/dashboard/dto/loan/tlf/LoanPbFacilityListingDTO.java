@@ -11,6 +11,8 @@ import java.io.Serializable;
 @Data
 public class LoanPbFacilityListingDTO implements BaseESBMetadata, Serializable {
     private String corpCifNo;
+    private String plafond;
+    private String limitAwal;
     private SearchCollectionResponse<LoanPbFacilityDTO> datas;
     private ESBMetadataDTO esbMetadata = new ESBMetadataDTO();
 }

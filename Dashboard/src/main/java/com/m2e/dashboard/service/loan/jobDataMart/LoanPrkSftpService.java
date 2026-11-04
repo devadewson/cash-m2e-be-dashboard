@@ -1,7 +1,8 @@
 package com.m2e.dashboard.service.loan.jobDataMart;
 
 
-import com.m2e.dashboard.service.trade.Refactor.TradeMart.SftpDownloader;
+import com.m2e.dashboard.service.Archiver.DatamartFileArchiver;
+import com.m2e.dashboard.service.trade.Trademart.SftpDownloader;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ public class LoanPrkSftpService {
 
     private final SftpDownloader downloader;
     private final LoanPrkFileProcessor fileProcessor;
+    private final DatamartFileArchiver archiver;
 
     @Value("${m2e.sftp.local-temp-directory}")
     private String localTempDirectory;
@@ -55,10 +57,16 @@ public class LoanPrkSftpService {
         long start = System.currentTimeMillis();
         log.info("=== PRK SFTP JOB STARTED | file={} ===", fileName);
 
+        String localFile = localTempDirectory + "/" + fileName;
+        boolean downloaded = false;
+        boolean processed = false;
+
         try {
-            String localFile = localTempDirectory + "/" + fileName;
             downloader.download(fileName, localFile);
+            downloaded = true;
+
             int inserted = fileProcessor.process(localFile);
+            processed = true;
 
             long elapsed = System.currentTimeMillis() - start;
             log.info("=== PRK SFTP JOB COMPLETED: {} baris dalam {}s ===", inserted, elapsed / 1000);
@@ -68,7 +76,12 @@ public class LoanPrkSftpService {
             log.error("=== PRK SFTP JOB FAILED ===", e);
             throw new RuntimeException("PRK SFTP job gagal: " + e.getMessage(), e);
         } finally {
+            // Hanya file hasil download hari ini; kalau download gagal, file di temp masih file kemarin
+            if (downloaded) {
+                archiver.archive(localFile, processed);
+            }
             running.set(false);
         }
     }
+
 }

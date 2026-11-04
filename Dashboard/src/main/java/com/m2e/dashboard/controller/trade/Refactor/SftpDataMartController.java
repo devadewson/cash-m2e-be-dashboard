@@ -1,6 +1,6 @@
 package com.m2e.dashboard.controller.trade.Refactor;
 
-import com.m2e.dashboard.service.trade.Refactor.TradeMart.SftpDataMartService;
+import com.m2e.dashboard.service.trade.Trademart.SftpDataMartService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

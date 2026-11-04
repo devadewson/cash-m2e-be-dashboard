@@ -64,6 +64,7 @@ public class LoanPrkListService {
             Page<LNOverdraftDTO> mappedPage;
             String plafond = ZERO_AMOUNT;
             String limitAwal = ZERO_AMOUNT;
+            String currency = "";
 
             Optional<DatamartDateRange> range = dateResolver.prk();
 
@@ -86,6 +87,8 @@ public class LoanPrkListService {
                 if (totals != null) {
                     plafond = toAmount(totals.getTotalAvailableLimitAwal());
                     limitAwal = toAmount(totals.getTotalLimitAwal());
+                    currency = totals.getCurrency();
+
                 }
             }
 

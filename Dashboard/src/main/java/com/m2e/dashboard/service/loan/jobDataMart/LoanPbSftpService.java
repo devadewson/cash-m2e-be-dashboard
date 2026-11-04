@@ -1,6 +1,7 @@
 package com.m2e.dashboard.service.loan.jobDataMart;
 
-import com.m2e.dashboard.service.trade.Refactor.TradeMart.SftpDownloader;
+import com.m2e.dashboard.service.Archiver.DatamartFileArchiver;
+import com.m2e.dashboard.service.trade.Trademart.SftpDownloader;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ public class LoanPbSftpService {
     private final SftpDownloader downloader;
     private final LoanPbDataLoader loader;
     private final CacheManager cacheManager;
+    private final DatamartFileArchiver archiver;
 
     @Value("${m2e.sftp.local-temp-directory}")
     private String localTempDirectory;
@@ -62,15 +64,20 @@ public class LoanPbSftpService {
         long start = System.currentTimeMillis();
         log.info("=== PB/PPB SFTP JOB STARTED ===");
 
-        try {
-            // Unduh di luar transaksi supaya koneksi DB tidak tertahan selama transfer
-            String facilityLocal = localTempDirectory + "/" + facilityFileName;
-            String drawLocal = localTempDirectory + "/" + drawFileName;
-            downloader.download(facilityFileName, facilityLocal);
-            downloader.download(drawFileName, drawLocal);
+        String facilityLocal = localTempDirectory + "/" + facilityFileName;
+        String drawLocal = localTempDirectory + "/" + drawFileName;
+        boolean facilityDownloaded = false;
+        boolean drawDownloaded = false;
+        boolean processed = false;
 
-            // Transaksi commit di dalam loader; setelah method ini kembali, data sudah tersimpan
+        try {
+            downloader.download(facilityFileName, facilityLocal);
+            facilityDownloaded = true;
+            downloader.download(drawFileName, drawLocal);
+            drawDownloaded = true;
+
             LoanPbDataLoader.LoadResult result = loader.load(facilityLocal, drawLocal);
+            processed = true;
 
             evictCaches();
 
@@ -83,6 +90,12 @@ public class LoanPbSftpService {
             log.error("=== PB/PPB SFTP JOB FAILED ===", e);
             throw new RuntimeException("PB/PPB SFTP job gagal: " + e.getMessage(), e);
         } finally {
+            if (facilityDownloaded) {
+                archiver.archive(facilityLocal, processed);
+            }
+            if (drawDownloaded) {
+                archiver.archive(drawLocal, processed);
+            }
             running.set(false);
         }
     }

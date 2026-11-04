@@ -1,7 +1,8 @@
 package com.m2e.dashboard.service.loan.plafond;
 
 
-import com.m2e.dashboard.service.trade.Refactor.TradeMart.SftpDownloader;
+import com.m2e.dashboard.service.Archiver.DatamartFileArchiver;
+import com.m2e.dashboard.service.trade.Trademart.SftpDownloader;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,8 @@ public class LoanPlafondSftpService {
     private final SftpDownloader downloader;
     private final LoanPlafondFileProcessor fileProcessor;
     private final CacheManager cacheManager;
+    private final DatamartFileArchiver archiver;
+
 
     @Value("${m2e.sftp.local-temp-directory}")
     private String localTempDirectory;
@@ -49,7 +52,6 @@ public class LoanPlafondSftpService {
             log.error("[PLAFOND-SFTP] Scheduled run failed", e);
         }
     }
-
     public long execute() {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("Plafond SFTP job sedang berjalan");
@@ -58,11 +60,16 @@ public class LoanPlafondSftpService {
         long start = System.currentTimeMillis();
         log.info("=== PLAFOND SFTP JOB STARTED | file={} ===", fileName);
 
+        String localFile = localTempDirectory + "/" + fileName;
+        boolean downloaded = false;
+        boolean processed = false;
+
         try {
-            String localFile = localTempDirectory + "/" + fileName;
             downloader.download(fileName, localFile);
+            downloaded = true;
 
             int inserted = fileProcessor.process(localFile);
+            processed = true;
 
             evictCache();
 
@@ -74,6 +81,9 @@ public class LoanPlafondSftpService {
             log.error("=== PLAFOND SFTP JOB FAILED ===", e);
             throw new RuntimeException("Plafond SFTP job gagal: " + e.getMessage(), e);
         } finally {
+            if (downloaded) {
+                archiver.archive(localFile, processed);
+            }
             running.set(false);
         }
     }

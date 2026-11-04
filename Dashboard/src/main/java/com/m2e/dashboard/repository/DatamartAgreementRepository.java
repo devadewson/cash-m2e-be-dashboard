@@ -8,6 +8,7 @@ import com.m2e.dashboard.projection.DatamartListingProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -107,4 +108,10 @@ public interface DatamartAgreementRepository extends JpaRepository<DatamartAgree
     );
     @Query("SELECT MAX(d.processDate) FROM DatamartAgreement d")
     LocalDateTime findLatestProcessDate();
+
+    @Modifying
+    @Query("DELETE FROM DatamartAgreement d WHERE d.processDate >= :startOfDay AND d.processDate < :endOfDay")
+    int deleteByProcessDateRange(@Param("startOfDay") LocalDateTime startOfDay,
+                                 @Param("endOfDay") LocalDateTime endOfDay);
+
 }

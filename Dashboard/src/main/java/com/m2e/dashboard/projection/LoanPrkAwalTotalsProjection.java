@@ -6,4 +6,5 @@ import java.math.BigDecimal;
 public interface LoanPrkAwalTotalsProjection {
     BigDecimal getTotalLimitAwal();
     BigDecimal getTotalAvailableLimitAwal();
+    String getCurrency();
 }

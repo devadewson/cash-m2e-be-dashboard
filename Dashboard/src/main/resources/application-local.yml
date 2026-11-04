@@ -53,7 +53,9 @@ m2e:
     prk-file-name: EDW_LOAN_PRK.TXT
     pb-facility-file-name: EDW_LOAN_PBPPB_Fasilitas.TXT
     pb-draw-file-name: EDW_LOAN_PBPPB_DrawNumber.TXT
+    plafond-file-name: EDW_Plafond.TXT
     local-temp-directory: C:/temp/sftp-files
+    backup-directory: C:/temp/sftp-backup
     polling-interval: 300000
 
   integration:
@@ -90,7 +92,7 @@ springdoc:
 
 rate:
   api:
-    url: https://erateee-dev.maybank.co.id:8668
+    url: https://erate-dev.maybank.co.id:8668
     tenor: TODAY
     client-name: M2U_270
   esb:
@@ -109,6 +111,8 @@ job:
     cron: "0 15 15 * * *"
   pb-datamart:
     cron: "0 20 15 * * *"
+  plafond-datamart:
+    cron: "0 25 15 * * *"
   asset-snapshot:
     cron: "0 45 15 * * *"
 
